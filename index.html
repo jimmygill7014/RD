@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PQ + Plan Order Form Prototype</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">Pure Financial Advisors</div>
+      <div class="user-pill">John Smith <span>| Advisor</span></div>
+    </header>
+
+    <main class="content">
+      <section class="pipeline" aria-label="Client onboarding pipeline">
+        <button id="step-btn-pq" type="button" class="pipeline-stage is-current" data-stage="pq">
+          <span class="pipeline-kicker">Phase 1</span>
+          <span class="pipeline-title">Discovery Intake</span>
+          <span class="pipeline-subtitle">PQ Template</span>
+          <span class="pipeline-status" id="stage-status-pq">In Progress</span>
+          <span class="pipeline-meta" id="stage-meta-pq">Capture initial client profile</span>
+        </button>
+        <button id="step-btn-plan" type="button" class="pipeline-stage is-locked" data-stage="plan">
+          <span class="pipeline-kicker">Phase 2</span>
+          <span class="pipeline-title">Planning Build</span>
+          <span class="pipeline-subtitle">Plan Order Form</span>
+          <span class="pipeline-status" id="stage-status-plan">Waiting on PQ</span>
+          <span class="pipeline-meta" id="stage-meta-plan">Advisor assumptions and analysis</span>
+        </button>
+        <button id="step-btn-client" type="button" class="pipeline-stage is-locked" data-stage="client">
+          <span class="pipeline-kicker">Phase 3</span>
+          <span class="pipeline-title">Client Confirmation</span>
+          <span class="pipeline-subtitle">Client Info Sheet</span>
+          <span class="pipeline-status" id="stage-status-client">Waiting on Plan</span>
+          <span class="pipeline-meta" id="stage-meta-client">Final validation summary</span>
+        </button>
+      </section>
+
+      <section id="screen-pq" class="screen is-active">
+        <section class="page-title">
+          <h1>PQ Template</h1>
+          <p>Enter client information</p>
+        </section>
+
+        <form id="pq-form">
+          <div id="pq-form-sections"></div>
+
+          <section class="form-section">
+            <h2>Review Output</h2>
+            <p class="section-note">Submitted payload preview</p>
+            <pre id="pq-json-preview">{}</pre>
+          </section>
+
+          <footer class="actions">
+            <button type="button" id="pq-reset-btn" class="btn btn-light">Reset</button>
+            <button type="button" id="pq-save-btn" class="btn btn-light">Save Draft</button>
+            <button type="button" id="go-to-plan-btn" class="btn btn-primary">Continue to Plan Order Form</button>
+          </footer>
+        </form>
+      </section>
+
+      <section id="screen-plan" class="screen" aria-hidden="true">
+        <section class="page-title">
+          <h1>Plan Order Form</h1>
+          <p>Confirm prefilled data from PQ Template and enter planning instructions</p>
+        </section>
+
+        <section class="legend-bar" aria-live="polite">
+          <span class="legend-pill">Highlighted fields were prefilled from PQ Template</span>
+        </section>
+
+        <form id="plan-form">
+          <div id="plan-form-sections"></div>
+
+          <section class="form-section">
+            <h2>Review Output</h2>
+            <p class="section-note">Submitted payload preview</p>
+            <pre id="plan-json-preview">{}</pre>
+          </section>
+
+          <footer class="actions">
+            <button type="button" id="back-to-pq-btn" class="btn btn-light">Back to PQ Template</button>
+            <button type="button" id="plan-reset-btn" class="btn btn-light">Reset Plan Draft</button>
+            <button type="button" id="plan-save-btn" class="btn btn-light">Save Draft</button>
+            <button type="button" id="go-to-client-btn" class="btn btn-primary">Continue to Client Info Sheet</button>
+            <button type="submit" class="btn btn-primary">Submit Plan Order</button>
+          </footer>
+        </form>
+      </section>
+
+      <section id="screen-client" class="screen" aria-hidden="true">
+        <section class="page-title">
+          <h1>Client Info Sheet</h1>
+          <p>Confirmation view of all captured data from PQ Template and Plan Order Form</p>
+        </section>
+
+        <section class="legend-bar" aria-live="polite">
+          <span class="legend-pill">Read-only confirmation. Update details on prior pages if changes are needed.</span>
+        </section>
+
+        <section class="form-section">
+          <div class="section-header">
+            <h2>Client Info Review</h2>
+            <button type="button" id="client-refresh-btn" aria-label="Refresh review">↻</button>
+          </div>
+          <div class="section-content">
+            <div id="client-review-sections"></div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <h2>Review Output</h2>
+          <p class="section-note">Combined payload preview (PQ + Plan Order Form)</p>
+          <pre id="client-json-preview">{}</pre>
+        </section>
+
+        <footer class="actions">
+          <button type="button" id="back-to-plan-btn" class="btn btn-light">Back to Plan Order Form</button>
+          <button type="button" id="client-save-btn" class="btn btn-light">Save Snapshot</button>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
