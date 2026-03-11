@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PQ + Plan Order Form Prototype</title>
+  <title>Advisor Workflow Prototype</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
@@ -13,7 +13,11 @@
   <div class="app-shell">
     <header class="topbar">
       <div class="brand">Pure Financial Advisors</div>
-      <div class="user-pill">John Smith <span>| Advisor</span></div>
+      <div class="topbar-actions">
+        <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
+        <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Demo</button>
+        <div class="user-pill">John Smith <span>| Advisor</span></div>
+      </div>
     </header>
 
     <main class="content">
@@ -23,72 +27,88 @@
           <span class="pipeline-title">Discovery Intake</span>
           <span class="pipeline-subtitle">PQ Template</span>
           <span class="pipeline-status" id="stage-status-pq">In Progress</span>
-          <span class="pipeline-meta" id="stage-meta-pq">Capture initial client profile</span>
+          <span class="pipeline-meta" id="stage-meta-pq">Intake not submitted</span>
         </button>
         <button id="step-btn-plan" type="button" class="pipeline-stage is-locked" data-stage="plan">
           <span class="pipeline-kicker">Phase 2</span>
           <span class="pipeline-title">Planning Build</span>
           <span class="pipeline-subtitle">Plan Order Form</span>
           <span class="pipeline-status" id="stage-status-plan">Waiting on PQ</span>
-          <span class="pipeline-meta" id="stage-meta-plan">Advisor assumptions and analysis</span>
+          <span class="pipeline-meta" id="stage-meta-plan">Plan not submitted</span>
         </button>
         <button id="step-btn-client" type="button" class="pipeline-stage is-locked" data-stage="client">
           <span class="pipeline-kicker">Phase 3</span>
           <span class="pipeline-title">Client Confirmation</span>
           <span class="pipeline-subtitle">Client Info Sheet</span>
           <span class="pipeline-status" id="stage-status-client">Waiting on Plan</span>
-          <span class="pipeline-meta" id="stage-meta-client">Final validation summary</span>
+          <span class="pipeline-meta" id="stage-meta-client">No updates submitted</span>
         </button>
       </section>
 
       <section id="screen-pq" class="screen is-active">
         <section class="page-title">
           <h1>PQ Template</h1>
-          <p>Enter client information</p>
+          <p>Phase 1: collect discovery intake details</p>
         </section>
 
         <form id="pq-form">
           <div id="pq-form-sections"></div>
-
-          <section class="form-section">
-            <h2>Review Output</h2>
-            <p class="section-note">Submitted payload preview</p>
-            <pre id="pq-json-preview">{}</pre>
-          </section>
-
           <footer class="actions">
-            <button type="button" id="pq-reset-btn" class="btn btn-light">Reset</button>
-            <button type="button" id="pq-save-btn" class="btn btn-light">Save Draft</button>
-            <button type="button" id="go-to-plan-btn" class="btn btn-primary">Continue to Plan Order Form</button>
+            <button type="button" id="pq-reset-btn" class="btn btn-light">Clear PQ Form</button>
+            <button type="submit" id="pq-submit-btn" class="btn btn-primary">Submit Discovery Intake</button>
           </footer>
         </form>
+      </section>
+
+      <section id="screen-pq-review" class="screen" aria-hidden="true">
+        <section class="page-title">
+          <h1>PQ Review</h1>
+          <p>Submitted intake snapshot from the central data store</p>
+        </section>
+
+        <section class="review-columns">
+          <article class="form-section review-pane">
+            <div class="section-header static-header">
+              <h2>Data Collected</h2>
+            </div>
+            <div class="section-content">
+              <ul id="pq-collected-list" class="review-list"></ul>
+            </div>
+          </article>
+
+          <article class="form-section review-pane">
+            <div class="section-header static-header">
+              <h2>Data Not Collected</h2>
+            </div>
+            <div class="section-content">
+              <ul id="pq-missing-list" class="review-list"></ul>
+            </div>
+          </article>
+        </section>
+
+        <footer class="actions">
+          <button type="button" id="back-to-pq-edit-btn" class="btn btn-light">Back to PQ Template</button>
+          <button type="button" id="continue-to-plan-btn" class="btn btn-primary">Start Planning Build</button>
+        </footer>
       </section>
 
       <section id="screen-plan" class="screen" aria-hidden="true">
         <section class="page-title">
           <h1>Plan Order Form</h1>
-          <p>Confirm prefilled data from PQ Template and enter planning instructions</p>
+          <p>Phase 2: confirm and extend assumptions for planning</p>
         </section>
 
         <section class="legend-bar" aria-live="polite">
-          <span class="legend-pill">Highlighted fields were prefilled from PQ Template</span>
+          <span class="legend-pill legend-yellow">Yellow = prefilled from central store</span>
+          <span class="legend-pill legend-red">Red = missing</span>
+          <span class="legend-pill legend-green">Green = completed/confirmed</span>
         </section>
 
         <form id="plan-form">
           <div id="plan-form-sections"></div>
-
-          <section class="form-section">
-            <h2>Review Output</h2>
-            <p class="section-note">Submitted payload preview</p>
-            <pre id="plan-json-preview">{}</pre>
-          </section>
-
           <footer class="actions">
-            <button type="button" id="back-to-pq-btn" class="btn btn-light">Back to PQ Template</button>
-            <button type="button" id="plan-reset-btn" class="btn btn-light">Reset Plan Draft</button>
-            <button type="button" id="plan-save-btn" class="btn btn-light">Save Draft</button>
-            <button type="button" id="go-to-client-btn" class="btn btn-primary">Continue to Client Info Sheet</button>
-            <button type="submit" class="btn btn-primary">Submit Plan Order</button>
+            <button type="button" id="back-to-pq-review-btn" class="btn btn-light">Back to PQ Review</button>
+            <button type="submit" id="plan-submit-btn" class="btn btn-primary">Submit Plan Order Form</button>
           </footer>
         </form>
       </section>
@@ -96,36 +116,41 @@
       <section id="screen-client" class="screen" aria-hidden="true">
         <section class="page-title">
           <h1>Client Info Sheet</h1>
-          <p>Confirmation view of all captured data from PQ Template and Plan Order Form</p>
+          <p>Phase 3: confirm and edit any centralized information</p>
         </section>
 
         <section class="legend-bar" aria-live="polite">
-          <span class="legend-pill">Read-only confirmation. Update details on prior pages if changes are needed.</span>
+          <span class="legend-pill">Gray = unchanged from central store</span>
+          <span class="legend-pill legend-yellow">Yellow = edited (not committed)</span>
+          <span class="legend-pill legend-green">Green = committed update</span>
         </section>
 
         <section class="form-section">
-          <div class="section-header">
-            <h2>Client Info Review</h2>
-            <button type="button" id="client-refresh-btn" aria-label="Refresh review">↻</button>
+          <div class="section-header static-header">
+            <h2>Editable Central Record</h2>
+            <button type="button" id="refresh-client-sheet-btn" class="btn-link">Refresh</button>
           </div>
           <div class="section-content">
-            <div id="client-review-sections"></div>
+            <div id="client-editor-grid" class="grid"></div>
           </div>
-        </section>
-
-        <section class="form-section">
-          <h2>Review Output</h2>
-          <p class="section-note">Combined payload preview (PQ + Plan Order Form)</p>
-          <pre id="client-json-preview">{}</pre>
         </section>
 
         <footer class="actions">
           <button type="button" id="back-to-plan-btn" class="btn btn-light">Back to Plan Order Form</button>
-          <button type="button" id="client-save-btn" class="btn btn-light">Save Snapshot</button>
+          <button type="button" id="client-update-btn" class="btn btn-primary">Update Central Record</button>
         </footer>
       </section>
     </main>
   </div>
+
+  <aside id="data-console" class="data-console" aria-hidden="true">
+    <header class="data-console-header">
+      <h2>Data Console</h2>
+      <button type="button" id="close-console-btn" class="btn btn-light">Close</button>
+    </header>
+    <p class="section-note">Central data store (read-only debug view)</p>
+    <pre id="console-json">{}</pre>
+  </aside>
 
   <script src="./app.js"></script>
 </body>

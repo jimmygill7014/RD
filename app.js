@@ -1,19 +1,10 @@
-const PQ_DRAFT_KEY = 'pq-template-draft-v1';
-const PLAN_DRAFT_KEY = 'plan-order-draft-v1';
-const CLIENT_SNAPSHOT_KEY = 'client-info-sheet-snapshot-v1';
-const PQ_UPDATED_KEY = 'pq-template-updated-at';
-const PLAN_UPDATED_KEY = 'plan-order-updated-at';
-const CLIENT_UPDATED_KEY = 'client-info-updated-at';
-
-let currentScreen = 'pq';
-
 const pqSchema = [
   {
     id: 'family',
     title: 'Family Information',
     note: 'Core household and referral details from the PQ template.',
     fields: [
-      { key: 'yourName', label: 'Your Name', width: 'medium' },
+      { key: 'yourName', label: 'First Name', width: 'medium' },
       { key: 'yourLastName', label: 'Last Name', width: 'medium' },
       { key: 'yourNickname', label: 'Nickname', width: 'medium' },
       { key: 'yourBirthDate', label: 'Birth Date', type: 'date' },
@@ -364,6 +355,10 @@ const planSchema = [
   }
 ];
 
+const CENTRAL_STORE_KEY = 'central-advisor-workflow-v1';
+let currentScreen = 'pq';
+const planPrefillBaseline = {};
+
 const planPrefillMap = {
   'clientInfo.clientName': (pq) => joinName(getDeep(pq, 'family.yourName'), getDeep(pq, 'family.yourLastName')),
   'clientInfo.spouseName': (pq) => joinName(getDeep(pq, 'family.spouseName'), getDeep(pq, 'family.spouseLastName')),
@@ -383,6 +378,13 @@ const planPrefillMap = {
   'estatePlanning.estatePlanningDetails': (pq) => getDeep(pq, 'occupationGoals.estatePlanYear')
 };
 
+const CLIENT_LABEL_OVERRIDES = {
+  'pqTemplate.family.yourName': 'First Name',
+  'pqTemplate.family.yourLastName': 'Last Name',
+  'pqTemplate.family.spouseName': 'Spouse First Name',
+  'pqTemplate.family.spouseLastName': 'Spouse Last Name'
+};
+
 function joinName(first, last) {
   return [first, last].filter(Boolean).join(' ').trim();
 }
@@ -398,20 +400,54 @@ function getDeep(source, path) {
 function setDeep(target, path, value) {
   const keys = parsePath(path);
   let ref = target;
-
   keys.forEach((key, idx) => {
     const isLast = idx === keys.length - 1;
     const nextKey = keys[idx + 1];
     const nextIsIndex = nextKey !== undefined && /^\d+$/.test(nextKey);
-
     if (isLast) {
       ref[key] = value;
       return;
     }
-
     if (ref[key] === undefined) ref[key] = nextIsIndex ? [] : {};
     ref = ref[key];
   });
+}
+
+function deepClone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function hasData(value) {
+  if (value === null || value === undefined) return false;
+  if (Array.isArray(value)) return value.some((item) => hasData(item));
+  if (typeof value === 'object') return Object.values(value).some((child) => hasData(child));
+  return String(value).trim() !== '';
+}
+
+function getCentralStore() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CENTRAL_STORE_KEY) || '{}');
+    return {
+      pqTemplate: parsed.pqTemplate || {},
+      planOrder: parsed.planOrder || {},
+      workflow: parsed.workflow || {}
+    };
+  } catch {
+    return { pqTemplate: {}, planOrder: {}, workflow: {} };
+  }
+}
+
+function saveCentralStore(store) {
+  localStorage.setItem(CENTRAL_STORE_KEY, JSON.stringify(store));
+  refreshDataConsole();
+  updatePipeline();
+}
+
+function formatTimestamp(ts) {
+  if (!ts) return 'Not submitted';
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return 'Not submitted';
+  return date.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function buildSection(section, isOpen, formType) {
@@ -454,21 +490,21 @@ function buildFields(section, formType) {
     const label = document.createElement('label');
     const widthClass = field.width === 'wide' ? 'field-wide' : field.width === 'medium' ? 'field-medium' : 'field';
     label.className = `${widthClass}${field.type === 'textarea' ? ' field-full' : ''}`;
+    if (formType === 'plan') label.classList.add('flag-red');
 
-    const labelRow = document.createElement('div');
-    labelRow.className = 'label-row';
+    const row = document.createElement('div');
+    row.className = 'label-row';
 
     const title = document.createElement('span');
     title.className = 'label';
     title.textContent = field.label;
-
-    labelRow.appendChild(title);
+    row.appendChild(title);
 
     if (formType === 'plan') {
       const tag = document.createElement('span');
       tag.className = 'prefill-tag';
       tag.textContent = 'Prefilled';
-      labelRow.appendChild(tag);
+      row.appendChild(tag);
     }
 
     let input;
@@ -481,10 +517,10 @@ function buildFields(section, formType) {
       blank.value = '';
       blank.textContent = 'Select';
       input.appendChild(blank);
-      (field.options || []).forEach((optionValue) => {
+      (field.options || []).forEach((value) => {
         const option = document.createElement('option');
-        option.value = optionValue;
-        option.textContent = optionValue;
+        option.value = value;
+        option.textContent = value;
         input.appendChild(option);
       });
     } else {
@@ -493,10 +529,10 @@ function buildFields(section, formType) {
       if (field.type === 'number') input.step = 'any';
     }
 
-    input.name = `${section.id}.${field.key}`;
     input.dataset.path = `${section.id}.${field.key}`;
+    input.name = input.dataset.path;
 
-    label.append(labelRow, input);
+    label.append(row, input);
     grid.appendChild(label);
   });
 
@@ -505,50 +541,46 @@ function buildFields(section, formType) {
 
 function buildTable(sectionId, tableDef) {
   const block = document.createElement('div');
-  const toolbar = document.createElement('div');
-  toolbar.className = 'table-tools';
-  toolbar.innerHTML = `<div class=\"table-title\">${tableDef.title}</div>`;
+  const tools = document.createElement('div');
+  tools.className = 'table-tools';
+  tools.innerHTML = `<div class=\"table-title\">${tableDef.title}</div>`;
 
   const addBtn = document.createElement('button');
   addBtn.type = 'button';
   addBtn.className = 'btn-link';
   addBtn.textContent = '+ Add Row';
-  toolbar.appendChild(addBtn);
+  tools.appendChild(addBtn);
 
   const wrap = document.createElement('div');
   wrap.className = 'table-wrap';
-
   const table = document.createElement('table');
-  const thead = document.createElement('thead');
+  const head = document.createElement('thead');
   const headRow = document.createElement('tr');
   tableDef.columns.forEach((col) => {
     const th = document.createElement('th');
     th.textContent = col.label;
     headRow.appendChild(th);
   });
-  const actionTh = document.createElement('th');
-  actionTh.textContent = 'Actions';
-  headRow.appendChild(actionTh);
+  const action = document.createElement('th');
+  action.textContent = 'Actions';
+  headRow.appendChild(action);
+  head.appendChild(headRow);
+  table.appendChild(head);
 
-  thead.appendChild(headRow);
-  table.appendChild(thead);
-
-  const tbody = document.createElement('tbody');
-  tbody.dataset.tablePath = `${sectionId}.${tableDef.key}`;
-  table.appendChild(tbody);
-
+  const body = document.createElement('tbody');
+  body.dataset.tablePath = `${sectionId}.${tableDef.key}`;
+  table.appendChild(body);
   wrap.appendChild(table);
-  block.append(toolbar, wrap);
+  block.append(tools, wrap);
 
   const starterRows = tableDef.starterRows?.length ? tableDef.starterRows : [];
-  if (starterRows.length) starterRows.forEach((rowData) => addTableRow(tbody, sectionId, tableDef, rowData));
+  starterRows.forEach((rowData) => addTableRow(body, sectionId, tableDef, rowData));
 
-  const existingRows = tbody.children.length;
-  const requiredRows = Math.max(tableDef.minRows || 1, existingRows || 0);
-  for (let i = existingRows; i < requiredRows; i += 1) addTableRow(tbody, sectionId, tableDef);
+  const existing = body.children.length;
+  const required = Math.max(tableDef.minRows || 1, existing || 0);
+  for (let i = existing; i < required; i += 1) addTableRow(body, sectionId, tableDef);
 
-  addBtn.addEventListener('click', () => addTableRow(tbody, sectionId, tableDef));
-
+  addBtn.addEventListener('click', () => addTableRow(body, sectionId, tableDef));
   return block;
 }
 
@@ -568,20 +600,18 @@ function addTableRow(tbody, sectionId, tableDef, seed = {}) {
     row.appendChild(td);
   });
 
-  const actionCell = document.createElement('td');
-  actionCell.className = 'row-actions';
-  const deleteBtn = document.createElement('button');
-  deleteBtn.type = 'button';
-  deleteBtn.className = 'btn-link';
-  deleteBtn.textContent = 'Remove';
-  deleteBtn.addEventListener('click', () => {
+  const actionTd = document.createElement('td');
+  actionTd.className = 'row-actions';
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.className = 'btn-link';
+  del.textContent = 'Remove';
+  del.addEventListener('click', () => {
     row.remove();
     reindexTableRows(tbody, sectionId, tableDef);
-    updatePreview(document.getElementById('pq-form'), 'pq-json-preview');
   });
-  actionCell.appendChild(deleteBtn);
-  row.appendChild(actionCell);
-
+  actionTd.appendChild(del);
+  row.appendChild(actionTd);
   tbody.appendChild(row);
 }
 
@@ -609,21 +639,18 @@ function collectFormData(formEl) {
 
 function fillFormData(formEl, data) {
   formEl.querySelectorAll('[data-path]').forEach((el) => {
-    const ref = getDeep(data, el.dataset.path);
-    if (ref !== undefined && ref !== null) el.value = ref;
+    const value = getDeep(data, el.dataset.path);
+    if (value !== undefined && value !== null) el.value = value;
   });
 }
 
 function hydrateTableRows(formEl, schema, data) {
   schema.forEach((section) => {
     (section.tables || []).forEach((tableDef) => {
-      const path = `${section.id}.${tableDef.key}`;
-      const rows = getDeep(data, path);
+      const rows = getDeep(data, `${section.id}.${tableDef.key}`);
       if (!Array.isArray(rows)) return;
-
-      const tbody = formEl.querySelector(`[data-table-path="${path}"]`);
+      const tbody = formEl.querySelector(`[data-table-path=\"${section.id}.${tableDef.key}\"]`);
       if (!tbody) return;
-
       const current = tbody.children.length;
       for (let i = current; i < rows.length; i += 1) addTableRow(tbody, section.id, tableDef);
       reindexTableRows(tbody, section.id, tableDef);
@@ -638,37 +665,71 @@ function clearForm(formEl) {
   });
 }
 
-function updatePreview(formEl, previewId) {
-  const payload = collectFormData(formEl);
-  document.getElementById(previewId).textContent = JSON.stringify(payload, null, 2);
-}
-
-function markPrefilled(planFormEl, planPath, isPrefilled) {
-  const input = planFormEl.querySelector(`[data-path="${planPath}"]`);
+function setPlanFieldFlag(path, flag) {
+  const input = document.querySelector(`#plan-form [data-path=\"${path}\"]`);
   if (!input) return;
   const field = input.closest('.field, .field-medium, .field-wide, .field-full');
   if (!field) return;
-  if (isPrefilled) field.classList.add('is-prefilled');
-  else field.classList.remove('is-prefilled');
+  field.classList.remove('flag-red', 'flag-yellow', 'flag-green');
+  field.classList.add(flag);
 }
 
-function applyPrefillFromPq(planFormEl, pqData, force = false) {
-  if (!pqData || Object.keys(pqData).length === 0) return;
+function initializePlanFormFromCentral() {
+  const store = getCentralStore();
+  const planForm = document.getElementById('plan-form');
+  clearForm(planForm);
+  Object.keys(planPrefillBaseline).forEach((k) => delete planPrefillBaseline[k]);
 
-  Object.entries(planPrefillMap).forEach(([planPath, resolver]) => {
-    const mappedValue = resolver(pqData);
-    if (mappedValue === undefined || mappedValue === null || mappedValue === '') return;
-
-    const input = planFormEl.querySelector(`[data-path="${planPath}"]`);
-    if (!input) return;
-
-    const currentValue = input.value;
-    const shouldApply = force || currentValue === '';
-    if (shouldApply) {
-      input.value = mappedValue;
-    }
-    if (shouldApply || String(currentValue) === String(mappedValue)) markPrefilled(planFormEl, planPath, true);
+  planForm.querySelectorAll('.field, .field-medium, .field-wide, .field-full').forEach((field) => {
+    field.classList.remove('flag-red', 'flag-yellow', 'flag-green');
+    field.classList.add('flag-red');
   });
+
+  fillFormData(planForm, store.planOrder || {});
+
+  Object.keys(planPrefillMap).forEach((path) => {
+    const input = planForm.querySelector(`[data-path=\"${path}\"]`);
+    if (!input) return;
+    const existingPlan = getDeep(store.planOrder || {}, path);
+    if (existingPlan !== undefined && existingPlan !== null && existingPlan !== '') {
+      input.value = existingPlan;
+      setPlanFieldFlag(path, 'flag-green');
+      return;
+    }
+    const mapped = planPrefillMap[path](store.pqTemplate || {});
+    if (mapped !== undefined && mapped !== null && mapped !== '') {
+      input.value = mapped;
+      planPrefillBaseline[path] = String(mapped);
+      setPlanFieldFlag(path, 'flag-yellow');
+    } else {
+      setPlanFieldFlag(path, 'flag-red');
+    }
+  });
+
+  planForm.querySelectorAll('[data-path]').forEach((input) => {
+    const path = input.dataset.path;
+    if (!planPrefillMap[path]) {
+      if (input.value !== '') setPlanFieldFlag(path, 'flag-green');
+      else setPlanFieldFlag(path, 'flag-red');
+    }
+  });
+}
+
+function onPlanInput(event) {
+  const input = event.target;
+  if (!input?.dataset?.path) return;
+  const path = input.dataset.path;
+  const value = String(input.value || '');
+  const baseline = planPrefillBaseline[path];
+  if (value === '') {
+    setPlanFieldFlag(path, 'flag-red');
+    return;
+  }
+  if (baseline !== undefined && value === baseline) {
+    setPlanFieldFlag(path, 'flag-yellow');
+    return;
+  }
+  setPlanFieldFlag(path, 'flag-green');
 }
 
 function renderSchema(hostId, schema, formType) {
@@ -681,66 +742,15 @@ function renderSchema(hostId, schema, formType) {
 
 function setActiveScreen(screenId) {
   currentScreen = screenId;
-  const pqScreen = document.getElementById('screen-pq');
-  const planScreen = document.getElementById('screen-plan');
-  const clientScreen = document.getElementById('screen-client');
-
-  const showPq = screenId === 'pq';
-  const showPlan = screenId === 'plan';
-  const showClient = screenId === 'client';
-
-  pqScreen.classList.toggle('is-active', showPq);
-  pqScreen.setAttribute('aria-hidden', String(!showPq));
-  planScreen.classList.toggle('is-active', showPlan);
-  planScreen.setAttribute('aria-hidden', String(!showPlan));
-  clientScreen.classList.toggle('is-active', showClient);
-  clientScreen.setAttribute('aria-hidden', String(!showClient));
+  const screens = ['pq', 'pq-review', 'plan', 'client'];
+  screens.forEach((id) => {
+    const node = document.getElementById(`screen-${id}`);
+    if (!node) return;
+    const show = id === screenId;
+    node.classList.toggle('is-active', show);
+    node.setAttribute('aria-hidden', String(!show));
+  });
   updatePipeline();
-}
-
-function persistPq() {
-  const pqPayload = collectFormData(document.getElementById('pq-form'));
-  localStorage.setItem(PQ_DRAFT_KEY, JSON.stringify(pqPayload));
-  localStorage.setItem(PQ_UPDATED_KEY, String(Date.now()));
-  updatePipeline();
-  return pqPayload;
-}
-
-function persistPlan() {
-  const planPayload = collectFormData(document.getElementById('plan-form'));
-  localStorage.setItem(PLAN_DRAFT_KEY, JSON.stringify(planPayload));
-  localStorage.setItem(PLAN_UPDATED_KEY, String(Date.now()));
-  updatePipeline();
-  return planPayload;
-}
-
-function buildCombinedPayload() {
-  return {
-    pq: collectFormData(document.getElementById('pq-form')),
-    planOrder: collectFormData(document.getElementById('plan-form'))
-  };
-}
-
-function formatReviewValue(value) {
-  if (value === undefined || value === null || value === '') return '<span class="empty-note">Not provided</span>';
-  if (Array.isArray(value)) return value.length ? `${value.length} item(s)` : '<span class="empty-note">Not provided</span>';
-  if (typeof value === 'object') return JSON.stringify(value);
-  return String(value);
-}
-
-function hasData(value) {
-  if (value === null || value === undefined) return false;
-  if (Array.isArray(value)) return value.some((item) => hasData(item));
-  if (typeof value === 'object') return Object.values(value).some((child) => hasData(child));
-  return String(value).trim() !== '';
-}
-
-function formatTimestamp(timestampValue) {
-  if (!timestampValue) return '';
-  const parsed = Number(timestampValue);
-  const date = Number.isNaN(parsed) ? new Date(timestampValue) : new Date(parsed);
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function setPipelineStage(stageId, stateClass, statusText, metaText, disabled) {
@@ -748,7 +758,6 @@ function setPipelineStage(stageId, stateClass, statusText, metaText, disabled) {
   const status = document.getElementById(`stage-status-${stageId}`);
   const meta = document.getElementById(`stage-meta-${stageId}`);
   if (!stage || !status || !meta) return;
-
   stage.classList.remove('is-current', 'is-complete', 'is-ready', 'is-locked');
   stage.classList.add(stateClass);
   stage.disabled = Boolean(disabled);
@@ -757,293 +766,339 @@ function setPipelineStage(stageId, stateClass, statusText, metaText, disabled) {
 }
 
 function updatePipeline() {
-  const pqData = collectFormData(document.getElementById('pq-form'));
-  const planData = collectFormData(document.getElementById('plan-form'));
-  const hasPqData = hasData(pqData);
-  const hasPlanData = hasData(planData);
-  const hasClientSnapshot = Boolean(localStorage.getItem(CLIENT_SNAPSHOT_KEY));
+  const store = getCentralStore();
+  const pqSubmitted = Boolean(store.workflow.pqSubmittedAt);
+  const planSubmitted = Boolean(store.workflow.planSubmittedAt);
+  const clientUpdated = Boolean(store.workflow.clientUpdatedAt);
 
-  const pqStamp = formatTimestamp(localStorage.getItem(PQ_UPDATED_KEY));
-  const planStamp = formatTimestamp(localStorage.getItem(PLAN_UPDATED_KEY));
-  const clientStamp = formatTimestamp(localStorage.getItem(CLIENT_UPDATED_KEY));
+  const pqCurrent = currentScreen === 'pq' || currentScreen === 'pq-review';
+  setPipelineStage(
+    'pq',
+    pqCurrent ? 'is-current' : (pqSubmitted ? 'is-complete' : 'is-ready'),
+    pqSubmitted ? 'Complete' : 'Open',
+    pqSubmitted ? `Submitted ${formatTimestamp(store.workflow.pqSubmittedAt)}` : 'Intake not submitted',
+    false
+  );
 
-  const pqState = currentScreen === 'pq' ? 'is-current' : (hasPqData ? 'is-complete' : 'is-current');
-  const pqStatus = currentScreen === 'pq' ? 'In Progress' : (hasPqData ? 'Completed' : 'In Progress');
-  const pqMeta = pqStamp ? `Updated ${pqStamp}` : 'Capture initial client profile';
-  setPipelineStage('pq', pqState, pqStatus, pqMeta, false);
+  const planClass = !pqSubmitted ? 'is-locked' : (currentScreen === 'plan' ? 'is-current' : (planSubmitted ? 'is-complete' : 'is-ready'));
+  const planStatus = !pqSubmitted ? 'Waiting on PQ' : (planSubmitted ? 'Complete' : 'Open');
+  const planMeta = planSubmitted ? `Submitted ${formatTimestamp(store.workflow.planSubmittedAt)}` : 'Plan not submitted';
+  setPipelineStage('plan', planClass, planStatus, planMeta, !pqSubmitted);
 
-  let planState = 'is-locked';
-  let planStatus = 'Waiting on PQ';
-  if (hasPqData) {
-    if (currentScreen === 'plan') {
-      planState = 'is-current';
-      planStatus = 'In Progress';
-    } else if (hasPlanData) {
-      planState = 'is-complete';
-      planStatus = 'Completed';
-    } else {
-      planState = 'is-ready';
-      planStatus = 'Ready for Next Phase';
-    }
-  }
-  const planMeta = planStamp ? `Updated ${planStamp}` : 'Advisor assumptions and analysis';
-  setPipelineStage('plan', planState, planStatus, planMeta, !hasPqData);
-
-  let clientState = 'is-locked';
-  let clientStatus = 'Waiting on Plan';
-  if (hasPlanData) {
-    if (currentScreen === 'client') {
-      clientState = 'is-current';
-      clientStatus = 'In Review';
-    } else if (hasClientSnapshot) {
-      clientState = 'is-complete';
-      clientStatus = 'Completed';
-    } else {
-      clientState = 'is-ready';
-      clientStatus = 'Ready for Confirmation';
-    }
-  }
-  const clientMeta = clientStamp ? `Updated ${clientStamp}` : 'Final validation summary';
-  setPipelineStage('client', clientState, clientStatus, clientMeta, !hasPlanData);
+  const clientClass = !planSubmitted ? 'is-locked' : (currentScreen === 'client' ? 'is-current' : (clientUpdated ? 'is-complete' : 'is-ready'));
+  const clientStatus = !planSubmitted ? 'Waiting on Plan' : (clientUpdated ? 'Complete' : 'Open');
+  const clientMeta = clientUpdated ? `Updated ${formatTimestamp(store.workflow.clientUpdatedAt)}` : 'No updates submitted';
+  setPipelineStage('client', clientClass, clientStatus, clientMeta, !planSubmitted);
 }
 
-function appendReviewSection(host, sourceLabel, sourceClass, section, sourceData) {
-  const block = document.createElement('section');
-  block.className = 'review-block';
-  block.innerHTML = `<h3>${section.title}</h3>`;
-
-  const grid = document.createElement('div');
-  grid.className = 'review-grid';
-
-  (section.fields || []).forEach((field) => {
-    const path = `${section.id}.${field.key}`;
-    const value = getDeep(sourceData, path);
-    const item = document.createElement('article');
-    item.className = `review-item ${sourceClass}`;
-    item.innerHTML = `<div class="review-item-label">${field.label}</div><div class="review-item-value">${formatReviewValue(value)}</div><div class="review-source">${sourceLabel}</div>`;
-    grid.appendChild(item);
-  });
-
-  (section.tables || []).forEach((tableDef) => {
-    const rows = getDeep(sourceData, `${section.id}.${tableDef.key}`) || [];
-    const item = document.createElement('article');
-    item.className = `review-item ${sourceClass}`;
-    const preview = Array.isArray(rows) && rows.length ? rows.slice(0, 2).map((row) => JSON.stringify(row)).join('\n') : '';
-    item.innerHTML = `<div class="review-item-label">${tableDef.title}</div><div class="review-item-value">${rows.length ? `${rows.length} row(s)` : '<span class="empty-note">No rows entered</span>'}${preview ? `\n${preview}` : ''}</div><div class="review-source">${sourceLabel}</div>`;
-    grid.appendChild(item);
-  });
-
-  if (!grid.children.length) return;
-
-  block.appendChild(grid);
-  host.appendChild(block);
+function refreshDataConsole() {
+  document.getElementById('console-json').textContent = JSON.stringify(getCentralStore(), null, 2);
 }
 
-function refreshClientInfoSheet() {
-  const combined = buildCombinedPayload();
-  const host = document.getElementById('client-review-sections');
+function summarizePqForReview() {
+  const store = getCentralStore();
+  const pq = store.pqTemplate || {};
+  const collected = [];
+  const missing = [];
+
+  pqSchema.forEach((section) => {
+    (section.fields || []).forEach((field) => {
+      const path = `${section.id}.${field.key}`;
+      const value = getDeep(pq, path);
+      const label = `${section.title} -> ${field.label}`;
+      if (hasData(value)) collected.push(`${label}: ${String(value).slice(0, 80)}`);
+      else missing.push(label);
+    });
+    (section.tables || []).forEach((tableDef) => {
+      const rows = getDeep(pq, `${section.id}.${tableDef.key}`);
+      const label = `${section.title} -> ${tableDef.title}`;
+      if (Array.isArray(rows) && rows.length > 0 && rows.some((r) => hasData(r))) {
+        collected.push(`${label}: ${rows.length} row(s) entered`);
+      } else {
+        missing.push(`${label}: no rows entered`);
+      }
+    });
+  });
+
+  const collectedHost = document.getElementById('pq-collected-list');
+  const missingHost = document.getElementById('pq-missing-list');
+  collectedHost.innerHTML = '';
+  missingHost.innerHTML = '';
+
+  if (!collected.length) {
+    const li = document.createElement('li');
+    li.textContent = 'No fields were submitted.';
+    collectedHost.appendChild(li);
+  } else {
+    collected.forEach((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      collectedHost.appendChild(li);
+    });
+  }
+
+  if (!missing.length) {
+    const li = document.createElement('li');
+    li.textContent = 'All tracked PQ fields were collected.';
+    missingHost.appendChild(li);
+  } else {
+    missing.forEach((text) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      missingHost.appendChild(li);
+    });
+  }
+}
+
+function flattenLeaves(obj, prefix = '') {
+  if (obj == null || typeof obj !== 'object' || Array.isArray(obj)) return [{ path: prefix, value: obj }];
+  const out = [];
+  Object.entries(obj).forEach(([key, value]) => {
+    const next = prefix ? `${prefix}.${key}` : key;
+    if (value != null && typeof value === 'object' && !Array.isArray(value)) out.push(...flattenLeaves(value, next));
+    else if (Array.isArray(value)) {
+      if (!value.length) out.push({ path: next, value: [] });
+      value.forEach((row, idx) => {
+        if (row != null && typeof row === 'object') out.push(...flattenLeaves(row, `${next}[${idx}]`));
+        else out.push({ path: `${next}[${idx}]`, value: row });
+      });
+    } else out.push({ path: next, value });
+  });
+  return out;
+}
+
+function getFriendlyClientLabel(path) {
+  if (CLIENT_LABEL_OVERRIDES[path]) return CLIENT_LABEL_OVERRIDES[path];
+
+  const sourceKey = path.startsWith('pqTemplate.') ? 'pqTemplate' : (path.startsWith('planOrder.') ? 'planOrder' : null);
+  if (!sourceKey) return path;
+
+  const schema = sourceKey === 'pqTemplate' ? pqSchema : planSchema;
+  const tokens = parsePath(path.replace(`${sourceKey}.`, ''));
+  const [sectionId, second, third, fourth] = tokens;
+  const section = schema.find((s) => s.id === sectionId);
+  if (!section) return path;
+
+  if (tokens.length === 2) {
+    const field = (section.fields || []).find((f) => f.key === second);
+    if (field) return field.label;
+  }
+
+  if (tokens.length >= 4 && /^\d+$/.test(third)) {
+    const table = (section.tables || []).find((t) => t.key === second);
+    if (!table) return path;
+    const column = (table.columns || []).find((c) => c.key === fourth);
+    const rowNumber = Number(third) + 1;
+    if (column) return `${column.label} (Row ${rowNumber})`;
+    return `${table.title} (Row ${rowNumber})`;
+  }
+
+  return section.title;
+}
+
+function renderClientEditor() {
+  const store = getCentralStore();
+  const host = document.getElementById('client-editor-grid');
   host.innerHTML = '';
+  const combined = {
+    pqTemplate: deepClone(store.pqTemplate || {}),
+    planOrder: deepClone(store.planOrder || {})
+  };
 
-  pqSchema.forEach((section) => appendReviewSection(host, 'From PQ Template', 'source-pq', section, combined.pq));
-  planSchema.forEach((section) => appendReviewSection(host, 'From Plan Order Form', 'source-plan', section, combined.planOrder));
+  const leaves = flattenLeaves(combined).filter((entry) => entry.path);
+  if (!leaves.length) {
+    const note = document.createElement('p');
+    note.className = 'section-note';
+    note.textContent = 'No submitted data found yet.';
+    host.appendChild(note);
+    return;
+  }
 
-  document.getElementById('client-json-preview').textContent = JSON.stringify(combined, null, 2);
-  updatePipeline();
-  return combined;
+  leaves.forEach((entry) => {
+    const field = document.createElement('label');
+    field.className = 'field-wide client-field';
+    const row = document.createElement('div');
+    row.className = 'label-row';
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = getFriendlyClientLabel(entry.path);
+    row.appendChild(label);
+
+    const input = document.createElement('input');
+    input.type = typeof entry.value === 'number' ? 'number' : 'text';
+    if (input.type === 'number') input.step = 'any';
+    input.value = entry.value ?? '';
+    input.dataset.clientPath = entry.path;
+    input.dataset.baseValue = entry.value ?? '';
+    input.dataset.valueType = typeof entry.value;
+    input.addEventListener('input', () => {
+      const changed = String(input.value) !== String(input.dataset.baseValue);
+      field.classList.toggle('pending', changed);
+      if (changed) field.classList.remove('committed');
+    });
+    field.append(row, input);
+    host.appendChild(field);
+  });
+}
+
+function commitClientEdits() {
+  const store = getCentralStore();
+  const fields = document.querySelectorAll('#client-editor-grid [data-client-path]');
+  fields.forEach((input) => {
+    const path = input.dataset.clientPath;
+    const valueType = input.dataset.valueType;
+    let val = input.value;
+    if (valueType === 'number' && val !== '') val = Number(val);
+    setDeep(store, path, val);
+    input.dataset.baseValue = String(val ?? '');
+    const container = input.closest('.client-field');
+    if (container) {
+      container.classList.remove('pending');
+      container.classList.add('committed');
+    }
+  });
+  store.workflow = store.workflow || {};
+  store.workflow.clientUpdatedAt = new Date().toISOString();
+  saveCentralStore(store);
 }
 
 function bindPqEvents() {
   const pqForm = document.getElementById('pq-form');
-
-  pqForm.addEventListener('input', () => {
-    updatePreview(pqForm, 'pq-json-preview');
-    updatePipeline();
-  });
-
-  document.getElementById('pq-save-btn').addEventListener('click', () => {
-    persistPq();
-    updatePreview(pqForm, 'pq-json-preview');
-    alert('PQ draft saved to localStorage.');
+  pqForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const payload = collectFormData(pqForm);
+    const store = getCentralStore();
+    store.pqTemplate = payload;
+    store.workflow = store.workflow || {};
+    store.workflow.pqSubmittedAt = new Date().toISOString();
+    saveCentralStore(store);
+    summarizePqForReview();
+    initializePlanFormFromCentral();
+    setActiveScreen('pq-review');
   });
 
   document.getElementById('pq-reset-btn').addEventListener('click', () => {
-    if (!confirm('Clear all PQ values and remove saved PQ draft?')) return;
-    localStorage.removeItem(PQ_DRAFT_KEY);
-    localStorage.removeItem(PQ_UPDATED_KEY);
-    localStorage.removeItem(PLAN_DRAFT_KEY);
-    localStorage.removeItem(PLAN_UPDATED_KEY);
-    localStorage.removeItem(CLIENT_SNAPSHOT_KEY);
-    localStorage.removeItem(CLIENT_UPDATED_KEY);
-    location.reload();
+    clearForm(pqForm);
   });
 
-  document.getElementById('go-to-plan-btn').addEventListener('click', () => {
-    const pqPayload = persistPq();
-    const planForm = document.getElementById('plan-form');
-    applyPrefillFromPq(planForm, pqPayload, false);
-    updatePreview(planForm, 'plan-json-preview');
+  document.getElementById('back-to-pq-edit-btn').addEventListener('click', () => setActiveScreen('pq'));
+  document.getElementById('continue-to-plan-btn').addEventListener('click', () => {
+    const store = getCentralStore();
+    if (!store.workflow?.pqSubmittedAt) {
+      alert('Submit Discovery Intake before moving to Planning Build.');
+      return;
+    }
+    initializePlanFormFromCentral();
     setActiveScreen('plan');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 }
 
 function bindPlanEvents() {
   const planForm = document.getElementById('plan-form');
-
-  planForm.addEventListener('input', () => {
-    updatePreview(planForm, 'plan-json-preview');
-    updatePipeline();
-  });
-
-  document.getElementById('plan-save-btn').addEventListener('click', () => {
-    persistPlan();
-    updatePreview(planForm, 'plan-json-preview');
-    alert('Plan Order draft saved to localStorage.');
-  });
-
-  document.getElementById('plan-reset-btn').addEventListener('click', () => {
-    if (!confirm('Reset Plan Order Form draft fields?')) return;
-    localStorage.removeItem(PLAN_DRAFT_KEY);
-    localStorage.removeItem(PLAN_UPDATED_KEY);
-    clearForm(planForm);
-    planForm.querySelectorAll('.is-prefilled').forEach((el) => el.classList.remove('is-prefilled'));
-    const pqPayload = collectFormData(document.getElementById('pq-form'));
-    applyPrefillFromPq(planForm, pqPayload, true);
-    updatePreview(planForm, 'plan-json-preview');
-    updatePipeline();
-  });
-
+  planForm.addEventListener('input', onPlanInput);
   planForm.addEventListener('submit', (event) => {
     event.preventDefault();
-    const payload = persistPlan();
-    updatePreview(planForm, 'plan-json-preview');
-    alert('Plan Order Form submitted. Payload saved locally for prototype testing.');
-    console.log('Plan Order Form payload', payload);
-  });
-
-  document.getElementById('back-to-pq-btn').addEventListener('click', () => {
-    persistPlan();
-    setActiveScreen('pq');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-
-  document.getElementById('go-to-client-btn').addEventListener('click', () => {
-    const pqPayload = persistPq();
-    const planPayload = persistPlan();
-    if (!hasData(pqPayload)) {
-      alert('Complete PQ Template before opening Client Info Sheet.');
+    const store = getCentralStore();
+    if (!store.workflow?.pqSubmittedAt) {
+      alert('Submit Discovery Intake first.');
       setActiveScreen('pq');
       return;
     }
-    if (!hasData(planPayload)) {
-      alert('Add details on Plan Order Form before opening Client Info Sheet.');
-      setActiveScreen('plan');
-      return;
-    }
-    refreshClientInfoSheet();
+    store.planOrder = collectFormData(planForm);
+    store.workflow = store.workflow || {};
+    store.workflow.planSubmittedAt = new Date().toISOString();
+    saveCentralStore(store);
+    renderClientEditor();
     setActiveScreen('client');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  document.getElementById('back-to-pq-review-btn').addEventListener('click', () => {
+    summarizePqForReview();
+    setActiveScreen('pq-review');
   });
 }
 
 function bindClientEvents() {
-  document.getElementById('back-to-plan-btn').addEventListener('click', () => {
-    setActiveScreen('plan');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  });
-
-  document.getElementById('client-refresh-btn').addEventListener('click', () => {
-    refreshClientInfoSheet();
-  });
-
-  document.getElementById('client-save-btn').addEventListener('click', () => {
-    const combined = refreshClientInfoSheet();
-    localStorage.setItem(CLIENT_SNAPSHOT_KEY, JSON.stringify(combined));
-    localStorage.setItem(CLIENT_UPDATED_KEY, String(Date.now()));
-    updatePipeline();
-    alert('Client Info Sheet snapshot saved to localStorage.');
-  });
+  document.getElementById('back-to-plan-btn').addEventListener('click', () => setActiveScreen('plan'));
+  document.getElementById('refresh-client-sheet-btn').addEventListener('click', renderClientEditor);
+  document.getElementById('client-update-btn').addEventListener('click', commitClientEdits);
 }
 
-function bindStepper() {
+function bindPipelineNavigation() {
   document.getElementById('step-btn-pq').addEventListener('click', () => {
-    persistPlan();
-    setActiveScreen('pq');
+    const store = getCentralStore();
+    setActiveScreen(store.workflow?.pqSubmittedAt ? 'pq-review' : 'pq');
   });
 
   document.getElementById('step-btn-plan').addEventListener('click', () => {
-    const pqPayload = persistPq();
-    if (!hasData(pqPayload)) {
-      alert('Complete at least part of PQ Template before moving to Planning Build.');
-      setActiveScreen('pq');
+    const store = getCentralStore();
+    if (!store.workflow?.pqSubmittedAt) {
+      alert('Submit Discovery Intake to unlock Planning Build.');
       return;
     }
-    applyPrefillFromPq(document.getElementById('plan-form'), pqPayload, false);
+    initializePlanFormFromCentral();
     setActiveScreen('plan');
-    updatePreview(document.getElementById('plan-form'), 'plan-json-preview');
   });
 
   document.getElementById('step-btn-client').addEventListener('click', () => {
-    const pqPayload = persistPq();
-    const planPayload = persistPlan();
-    if (!hasData(pqPayload)) {
-      alert('Complete PQ Template before opening Client Info Sheet.');
-      setActiveScreen('pq');
+    const store = getCentralStore();
+    if (!store.workflow?.planSubmittedAt) {
+      alert('Submit Plan Order Form to unlock Client Confirmation.');
       return;
     }
-    if (!hasData(planPayload)) {
-      alert('Complete Plan Order Form before opening Client Info Sheet.');
-      setActiveScreen('plan');
-      return;
-    }
-    refreshClientInfoSheet();
+    renderClientEditor();
     setActiveScreen('client');
   });
 }
 
-function hydrateDrafts() {
+function bindDataConsole() {
+  document.getElementById('reset-demo-btn').addEventListener('click', () => {
+    if (!confirm('Reset the full demo and clear all stored data?')) return;
+    const keys = [CENTRAL_STORE_KEY, 'pq-template-draft-v1', 'plan-order-draft-v1', 'client-info-sheet-snapshot-v1', 'pq-template-updated-at', 'plan-order-updated-at', 'client-info-updated-at'];
+    keys.forEach((key) => localStorage.removeItem(key));
+    location.reload();
+  });
+
+  const consoleEl = document.getElementById('data-console');
+  document.getElementById('open-console-btn').addEventListener('click', () => {
+    refreshDataConsole();
+    consoleEl.classList.add('is-open');
+    consoleEl.setAttribute('aria-hidden', 'false');
+  });
+  document.getElementById('close-console-btn').addEventListener('click', () => {
+    consoleEl.classList.remove('is-open');
+    consoleEl.setAttribute('aria-hidden', 'true');
+  });
+}
+
+function hydrateFromCentral() {
+  const store = getCentralStore();
   const pqForm = document.getElementById('pq-form');
-  const planForm = document.getElementById('plan-form');
-
-  const pqDraft = localStorage.getItem(PQ_DRAFT_KEY);
-  if (pqDraft) {
-    try {
-      const parsedPq = JSON.parse(pqDraft);
-      hydrateTableRows(pqForm, pqSchema, parsedPq);
-      fillFormData(pqForm, parsedPq);
-    } catch (error) {
-      console.warn('Unable to parse PQ draft', error);
-    }
+  if (hasData(store.pqTemplate)) {
+    hydrateTableRows(pqForm, pqSchema, store.pqTemplate);
+    fillFormData(pqForm, store.pqTemplate);
+    summarizePqForReview();
   }
-
-  const planDraft = localStorage.getItem(PLAN_DRAFT_KEY);
-  if (planDraft) {
-    try {
-      fillFormData(planForm, JSON.parse(planDraft));
-    } catch (error) {
-      console.warn('Unable to parse Plan draft', error);
-    }
-  }
-
-  const pqPayload = collectFormData(pqForm);
-  applyPrefillFromPq(planForm, pqPayload, false);
-
-  updatePreview(pqForm, 'pq-json-preview');
-  updatePreview(planForm, 'plan-json-preview');
-  refreshClientInfoSheet();
+  initializePlanFormFromCentral();
+  renderClientEditor();
 }
 
 function init() {
   renderSchema('pq-form-sections', pqSchema, 'pq');
   renderSchema('plan-form-sections', planSchema, 'plan');
 
-  bindStepper();
+  bindPipelineNavigation();
   bindPqEvents();
   bindPlanEvents();
   bindClientEvents();
-  hydrateDrafts();
+  bindDataConsole();
+  hydrateFromCentral();
+  refreshDataConsole();
 
-  setActiveScreen('pq');
+  const store = getCentralStore();
+  if (store.workflow?.planSubmittedAt) setActiveScreen('client');
+  else if (store.workflow?.pqSubmittedAt) setActiveScreen('pq-review');
+  else setActiveScreen('pq');
 }
 
 init();
