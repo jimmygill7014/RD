@@ -1,12 +1,12 @@
 :root {
   --panel: #ffffff;
-  --panel-alt: #f8fafb;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #d6dce2;
-  --accent: #0d7a61;
-  --accent-dark: #0a5c49;
-  --shadow: 0 18px 40px rgba(2, 10, 20, 0.18);
+  --panel-alt: #f3f6fa;
+  --text: #0f1e3b;
+  --muted: #5e6f82;
+  --border: #cad4df;
+  --accent: #00a0c4;
+  --accent-dark: #415877;
+  --shadow: 0 18px 40px rgba(12, 30, 65, 0.2);
 
   --flag-yellow-bg: #fff9db;
   --flag-yellow-border: #d9a708;
@@ -22,7 +22,7 @@ body {
   margin: 0;
   font-family: "Source Sans 3", "Segoe UI", sans-serif;
   color: var(--text);
-  background: radial-gradient(circle at top left, #dce4ea 0%, #f0f4f7 48%, #e6edf2 100%);
+  background: radial-gradient(circle at top left, #d9e4ef 0%, #edf2f6 48%, #e3e8ef 100%);
 }
 
 .app-shell {
@@ -31,7 +31,7 @@ body {
   border-radius: 14px;
   overflow: hidden;
   box-shadow: var(--shadow);
-  border: 1px solid #2f3b47;
+  border: 1px solid #24395d;
   background: var(--panel);
 }
 
@@ -41,8 +41,8 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 12px 24px;
-  color: #ecf5f3;
-  background: linear-gradient(120deg, #1d454a, #274f5d 42%, #214734 100%);
+  color: #edf4fb;
+  background: linear-gradient(120deg, #0c1e41, #1f3f67 42%, #415877 100%);
 }
 
 .brand {
@@ -60,11 +60,11 @@ body {
   font: 500 0.88rem "Space Grotesk", sans-serif;
 }
 
-.user-pill span { color: #b8d0c6; }
+.user-pill span { color: #b8d2e7; }
 
 .content {
   padding: 18px 20px 26px;
-  background: linear-gradient(180deg, #f8fafb 0, #f5f8fa 130px, #eff4f7 100%);
+  background: linear-gradient(180deg, #f7fafd 0, #f3f7fb 130px, #edf3f8 100%);
 }
 
 .pipeline {
@@ -132,14 +132,14 @@ body {
   font: 600 0.72rem "Space Grotesk", sans-serif;
 }
 
-.pipeline-stage.is-current { border-color: #7cb4a3; background: #e7f4ef; }
-.pipeline-stage.is-current .pipeline-status { background: #d1eee3; color: #0f604d; }
+.pipeline-stage.is-current { border-color: #83adc0; background: #e9f5fa; }
+.pipeline-stage.is-current .pipeline-status { background: #d5edf6; color: #1b4665; }
 
-.pipeline-stage.is-complete { border-color: #77aa97; background: #ecf7f1; }
-.pipeline-stage.is-complete .pipeline-status { background: #10694f; color: #f1fff9; }
+.pipeline-stage.is-complete { border-color: #8199ad; background: #ecf1f6; }
+.pipeline-stage.is-complete .pipeline-status { background: #415877; color: #f2f6fb; }
 
-.pipeline-stage.is-ready { border-color: #90aec6; background: #eef5fc; }
-.pipeline-stage.is-ready .pipeline-status { background: #d8e8f6; color: #294f73; }
+.pipeline-stage.is-ready { border-color: #8dbdcb; background: #ecf8fb; }
+.pipeline-stage.is-ready .pipeline-status { background: #d8f0f8; color: #244d63; }
 
 .pipeline-stage.is-locked { border-color: #d4dde6; background: #f5f7f9; color: #6e7e8f; }
 .pipeline-stage.is-locked .pipeline-status { background: #e7edf3; color: #5b6f83; }
@@ -191,7 +191,7 @@ body {
 .section-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #f8fbfc, #f3f7f9);
+  background: linear-gradient(180deg, #f8fbfd, #f1f6fa);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -343,7 +343,7 @@ th {
 .btn-light {
   border-color: #ccd4dc;
   background: white;
-  color: #24303a;
+  color: #24395d;
 }
 
 .btn-primary {
@@ -354,9 +354,9 @@ th {
 .btn-primary:hover { background: var(--accent-dark); }
 
 .btn-ghost {
-  border-color: #89a4b3;
+  border-color: #8fa8c0;
   background: rgba(255, 255, 255, 0.12);
-  color: #f2f8f6;
+  color: #f3f8fc;
 }
 
 .btn-ghost-danger {
@@ -372,7 +372,7 @@ th {
 .btn-link {
   border: none;
   background: transparent;
-  color: #0d7a61;
+  color: #2a5c87;
   font: 600 0.86rem "Space Grotesk", sans-serif;
   cursor: pointer;
 }
@@ -411,9 +411,9 @@ th {
   right: 10px;
   width: min(520px, 92vw);
   max-height: calc(100vh - 20px);
-  background: #0f1a24;
-  color: #d2f0e2;
-  border: 1px solid #2c3e4e;
+  background: #101f3f;
+  color: #d9eaf8;
+  border: 1px solid #304b73;
   border-radius: 10px;
   box-shadow: 0 20px 34px rgba(0, 0, 0, 0.35);
   padding: 14px;
@@ -438,12 +438,12 @@ th {
   margin: 0;
   max-height: calc(100vh - 140px);
   overflow: auto;
-  background: #0a1219;
-  border: 1px solid #263546;
+  background: #0a1630;
+  border: 1px solid #2b456b;
   border-radius: 6px;
   padding: 10px;
   font-size: 0.78rem;
-  color: #cfe8dc;
+  color: #d2e4f2;
 }
 
 .client-field {
