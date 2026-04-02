@@ -38,6 +38,40 @@ function attachCurrencyBehavior(inp) {
   }
 }
 
+/* ---------- FOCUS MANAGEMENT ---------- */
+// After renderPQ() rebuilds the DOM, focus the first visible input in a section
+// so the user's tab flow isn't thrown to the top of the page.
+function focusFirstInput(sectionId) {
+  requestAnimationFrame(() => {
+    const sec = findSectionEl(sectionId);
+    if (!sec) return;
+    const content = sec.querySelector('.section-content');
+    if (!content || content.classList.contains('collapsed')) return;
+    // Find the first visible, non-hidden, non-readonly input
+    const inp = content.querySelector(
+      'input:not([type="hidden"]):not([type="radio"]):not([type="checkbox"]):not([readonly]), select, textarea'
+    );
+    if (inp && inp.offsetParent !== null) {
+      inp.focus();
+    }
+  });
+}
+
+// After renderPQ() rebuilds the DOM from a checkbox/click, keep the section visible
+function scrollSectionIntoView(sectionId) {
+  requestAnimationFrame(() => {
+    const sec = findSectionEl(sectionId);
+    if (sec) sec.scrollIntoView({ behavior: 'instant', block: 'nearest' });
+  });
+}
+
+// Shared helper to locate a section's DOM element by its data-path prefix
+function findSectionEl(sectionId) {
+  return Array.from(document.querySelectorAll('.form-section')).find(s =>
+    s.querySelector(`[data-path^="${sectionId}."]`) != null
+  );
+}
+
 /* ---------- CONSTANTS ---------- */
 const STORE_KEY = 'pfa-intake-v2';
 const STAGES = ['pq', 'pq-review', 'plan', 'iap', 'client'];
@@ -136,7 +170,7 @@ function getOwnerNameOptions(pqData) {
   const c1 = [c1First, c1Last].filter(Boolean).join(' ');
   const c2 = [c2First, c2Last].filter(Boolean).join(' ');
   if (c1) opts.push(c1);
-  if (pqState.hasSpouse && c2) opts.push(c2);
+  if ((pqState.hasSpouse || c2First || c2Last) && c2) opts.push(c2);
   if (c1 && c2) opts.push('Joint');
 
   return opts;
@@ -180,7 +214,7 @@ const pqSections = [
       { key: 'client1LastName', label: 'Last Name', width: 'medium', required: true },
       { key: 'client1Nickname', label: 'Nickname', width: 'medium' },
       { key: 'client1DOB', label: 'Date of Birth', type: 'date', width: 'medium', required: true },
-      { key: 'client1Age', label: 'Age', type: 'computed', width: 'field-2', computed: (d) => calcAge(d?.family?.client1DOB) },
+      { key: 'client1Age', label: 'Age', type: 'number', width: 'field-2' },
     ],
     conditionalBlocks: [
       {
@@ -193,7 +227,7 @@ const pqSections = [
           { key: 'client2LastName', label: 'Spouse Last Name', width: 'medium' },
           { key: 'client2Nickname', label: 'Spouse Nickname', width: 'medium' },
           { key: 'client2DOB', label: 'Spouse Date of Birth', type: 'date', width: 'medium' },
-          { key: 'client2Age', label: 'Spouse Age', type: 'computed', width: 'field-2', computed: (d) => calcAge(d?.family?.client2DOB) },
+          { key: 'client2Age', label: 'Spouse Age', type: 'number', width: 'field-2' },
           { key: 'yearsMarried', label: 'Years Married', type: 'number', width: 'field' },
         ]
       }
@@ -617,7 +651,7 @@ function buildTableEl(sectionId, tableDef, existingData) {
     const actTd = el('td', { className: 'row-actions' });
     actTd.appendChild(el('button', {
       type: 'button', className: 'btn-icon', textContent: '\u00d7',
-      onClick: () => { tr.remove(); reindex(); }
+      onClick: () => { tr.remove(); reindex(); recalcPQComputed(); }
     }));
     tr.appendChild(actTd);
     tbody.appendChild(tr);
@@ -913,6 +947,19 @@ function renderPQ() {
   renderPQDashboard();
   // Wire live RE → Liabilities sync after DOM is fully built
   setupRELiabSync();
+  // Recalc dashboard on any form input (debounced to avoid excessive redraws)
+  setupFormRecalc();
+}
+
+let _recalcTimer = null;
+function setupFormRecalc() {
+  const form = document.getElementById('pq-form');
+  if (!form || form._recalcWired) return;
+  form._recalcWired = true;
+  form.addEventListener('input', () => {
+    clearTimeout(_recalcTimer);
+    _recalcTimer = setTimeout(recalcPQComputed, 150);
+  });
 }
 
 function buildPQSection(section, pqData) {
@@ -942,7 +989,8 @@ function buildPQSection(section, pqData) {
   // Conditional blocks (spouse, children)
   if (section.conditionalBlocks) {
     section.conditionalBlocks.forEach(block => {
-      const container = el('div', { className: 'subsection', id: `pq-${block.id}` });
+      const containerClass = block.id === 'spouse-block' ? 'subsection subsection-spouse' : 'subsection';
+      const container = el('div', { className: containerClass, id: `pq-${block.id}` });
       const btn = el('button', {
         type: 'button', className: 'btn-mini',
         textContent: pqState[block.flag] ? block.hideLabel : block.toggleLabel
@@ -961,6 +1009,7 @@ function buildPQSection(section, pqData) {
         blockContent.classList.toggle('hidden', !pqState[block.flag]);
         pqState.openSections[section.id] = true; // keep parent open
         renderPQ();
+        focusFirstInput(section.id);
       });
 
       container.append(btn, blockContent);
@@ -1113,6 +1162,7 @@ function renderEmploymentSection(section, pqData) {
       pqState.employmentClient1 = opt;
       pqState.openSections[section.id] = true;
       renderPQ();
+      focusFirstInput(section.id);
     });
     item.append(inp, document.createTextNode(opt));
     radio1.appendChild(item);
@@ -1146,6 +1196,7 @@ function renderEmploymentSection(section, pqData) {
         pqState.employmentClient2 = opt;
         pqState.openSections[section.id] = true;
         renderPQ();
+        focusFirstInput(section.id);
       });
       item.append(inp, document.createTextNode(opt));
       radio2.appendChild(item);
@@ -1194,6 +1245,7 @@ function renderAssetsSection(section, pqData) {
       _pqDraft._assetChecks[def.key] = cb.checked;
       pqState.openSections[section.id] = true;
       renderPQ();
+      scrollSectionIntoView(section.id);
     });
     item.append(cb, document.createTextNode(def.label));
     reChecks.appendChild(item);
@@ -1330,6 +1382,7 @@ function renderAssetsSection(section, pqData) {
       _pqDraft._assetChecks[def.key] = cb.checked;
       pqState.openSections[section.id] = true;
       renderPQ();
+      scrollSectionIntoView(section.id);
     });
     item.append(cb, document.createTextNode(def.label));
     invChecks.appendChild(item);
@@ -1499,16 +1552,14 @@ function renderLiabilitiesSection(section, pqData) {
 function renderIncomeSection(section, pqData) {
   const { wrapper, content } = buildCollapsibleShell(section.id, section.title);
   const ownerOptions = getOwnerNameOptions(pqData);
-  const primaryOwner = ownerOptions[0] || 'Client 1';
-  const spouseOwner = ownerOptions.find(o => o !== primaryOwner && o !== 'Joint') || 'Client 2 (Spouse)';
 
   // Auto-seed income rows from employment
   const starterRows = [];
   if (pqState.employmentClient1 === 'Employed') {
-    starterRows.push({ type: 'Employment', owner: primaryOwner, description: pqData?.employment?.client1?.employer || '' });
+    starterRows.push({ type: 'Employment', description: pqData?.employment?.client1?.employer || '' });
   }
   if (pqState.hasSpouse && pqState.employmentClient2 === 'Employed') {
-    starterRows.push({ type: 'Employment', owner: spouseOwner, description: pqData?.employment?.client2?.employer || '' });
+    starterRows.push({ type: 'Employment', description: pqData?.employment?.client2?.employer || '' });
   }
 
   const existingIncome = getDeep(pqData, 'income.sources');
@@ -1597,11 +1648,17 @@ function recalcPQComputed() {
   // Ages
   const dob1 = form.querySelector('[data-path="family.client1DOB"]');
   const age1 = form.querySelector('[data-path="family.client1Age"]');
-  if (dob1 && age1) age1.value = calcAge(dob1.value);
+  if (dob1 && age1) {
+    const v = calcAge(dob1.value);
+    if (v !== '') age1.value = v;
+  }
 
   const dob2 = form.querySelector('[data-path="family.client2DOB"]');
   const age2 = form.querySelector('[data-path="family.client2Age"]');
-  if (dob2 && age2) age2.value = calcAge(dob2.value);
+  if (dob2 && age2) {
+    const v = calcAge(dob2.value);
+    if (v !== '') age2.value = v;
+  }
 
   // Children/grandchildren count from separate tables
   const countRowsWithData = (prefix) => {
@@ -1664,67 +1721,93 @@ function renderPQDashboard() {
   const form = document.getElementById('pq-form');
   if (!form) return;
 
-  // Gather data for calculations (use parseCommas to handle formatted currency fields)
+  // ── Gather ALL data live from the DOM (parseCommas handles formatted currency) ──
+
+  // Helper: sum all inputs matching a selector where the path ends with a given key
+  const sumInputs = (selector, keySuffix) => {
+    let total = 0;
+    form.querySelectorAll(selector).forEach(inp => {
+      if (!keySuffix || inp.dataset.path.endsWith(keySuffix)) {
+        total += parseCommas(inp.value) || 0;
+      }
+    });
+    return total;
+  };
+
+  // Total Assets = RE market values + all investment account market values
+  let totalAssets = 0;
+  totalAssets += sumInputs('[data-path^="assets.realEstate["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.taxDeferred["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.roth["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.taxable["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.cashCd["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.plan529["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.hsa["]', '.marketValue');
+
+  // Total Savings = personal additions + company match across retirement accounts
   let totalSavings = 0;
-  form.querySelectorAll('[data-path$=".personalAdditions"]').forEach(inp => {
-    totalSavings += parseCommas(inp.value) || 0;
-  });
+  totalSavings += sumInputs('[data-path$=".personalAdditions"]');
+  totalSavings += sumInputs('[data-path$=".companyMatch"]');
 
-  let totalLiabilities = 0;
-  form.querySelectorAll('[data-path^="liabilities.items["]').forEach(inp => {
-    if (inp.dataset.path.endsWith('.amount')) totalLiabilities += parseCommas(inp.value) || 0;
-  });
+  // Total Liabilities
+  const totalLiabilities = sumInputs('[data-path^="liabilities.items["]', '.amount');
 
-  let totalIncome = 0;
-  form.querySelectorAll('[data-path^="income.sources["]').forEach(inp => {
-    if (inp.dataset.path.endsWith('.annualAmount')) totalIncome += parseCommas(inp.value) || 0;
-  });
+  // Total Income
+  const totalIncome = sumInputs('[data-path^="income.sources["]', '.annualAmount');
 
+  // Total Taxes
   let totalTax = 0;
   ['federalTax', 'stateTax', 'ficaTax'].forEach(k => {
     totalTax += parseCommas(form.querySelector(`[data-path="taxesExpenses.${k}"]`)?.value) || 0;
   });
 
-  let totalExpenses = 0;
-  form.querySelectorAll('[data-path^="taxesExpenses.expenses["]').forEach(inp => {
-    if (inp.dataset.path.endsWith('.amount')) totalExpenses += parseCommas(inp.value) || 0;
-  });
+  // Total Expenses
+  const totalExpenses = sumInputs('[data-path^="taxesExpenses.expenses["]', '.amount');
 
+  // Derived metrics
+  const totalNetWorth = totalAssets - totalLiabilities;
   const dti = totalIncome > 0 ? (totalLiabilities / totalIncome * 100) : 0;
+  const savingsRatio = totalIncome > 0 ? (totalSavings / totalIncome * 100) : 0;
   const cashFlow = totalIncome - totalTax - totalExpenses - totalSavings;
 
-  // Financial Summary card
+  // ── Financial Summary card ──
   const card1 = el('div', { className: 'dashboard-card' });
   card1.appendChild(el('h3', { textContent: 'Financial Summary' }));
   const metrics = el('ul', { className: 'metric-list' });
   [
-    ['Total Savings', fmt$(totalSavings)],
+    ['Total Assets', fmt$(totalAssets)],
     ['Total Liabilities', fmt$(totalLiabilities)],
+    ['Total Net Worth', fmt$(totalNetWorth)],
+    ['Total Savings', fmt$(totalSavings)],
     ['Total Income', fmt$(totalIncome)],
     ['Total Taxes', fmt$(totalTax)],
     ['Total Expenses', fmt$(totalExpenses)],
   ].forEach(([label, value]) => {
     const li = el('li');
     li.appendChild(el('span', { textContent: label }));
-    li.appendChild(el('strong', { className: 'metric-value', textContent: value }));
+    const cls = (label === 'Total Net Worth')
+      ? `metric-value ${totalNetWorth >= 0 ? 'positive' : 'negative'}`
+      : 'metric-value';
+    li.appendChild(el('strong', { className: cls, textContent: value }));
     metrics.appendChild(li);
   });
   card1.appendChild(metrics);
 
-  // Ratios
+  // ── Key Ratios card ──
   const card2 = el('div', { className: 'dashboard-card' });
   card2.appendChild(el('h3', { textContent: 'Key Ratios' }));
   const ratios = el('ul', { className: 'metric-list' });
 
-  const dtiLi = el('li');
-  dtiLi.appendChild(el('span', { textContent: 'Debt-to-Income' }));
-  dtiLi.appendChild(el('strong', { className: `metric-value ${dti > 40 ? 'negative' : dti > 20 ? 'warning' : 'positive'}`, textContent: fmtPct(dti) }));
-  ratios.appendChild(dtiLi);
+  const addRatio = (label, value, colorClass) => {
+    const li = el('li');
+    li.appendChild(el('span', { textContent: label }));
+    li.appendChild(el('strong', { className: `metric-value ${colorClass}`, textContent: value }));
+    ratios.appendChild(li);
+  };
 
-  const cfLi = el('li');
-  cfLi.appendChild(el('span', { textContent: 'Cash Flow' }));
-  cfLi.appendChild(el('strong', { className: `metric-value ${cashFlow >= 0 ? 'positive' : 'negative'}`, textContent: fmt$(cashFlow) }));
-  ratios.appendChild(cfLi);
+  addRatio('Debt-to-Income', fmtPct(dti), dti > 40 ? 'negative' : dti > 20 ? 'warning' : 'positive');
+  addRatio('Savings Ratio', fmtPct(savingsRatio), savingsRatio >= 20 ? 'positive' : savingsRatio >= 10 ? 'warning' : 'negative');
+  addRatio('Cash Flow', fmt$(cashFlow), cashFlow >= 0 ? 'positive' : 'negative');
 
   card2.appendChild(ratios);
 
