@@ -283,7 +283,6 @@ const pqSections = [
       { key: 'client2Cell', label: 'Spouse Cell Phone', width: 'medium', showIf: 'hasSpouse' },
       { key: 'client2Email', label: 'Spouse Email', type: 'email', width: 'wide', showIf: 'hasSpouse' },
       { key: 'referredBy', label: 'Referred By', width: 'medium' },
-      { key: 'referralSource', label: 'Referral Source / Client Name', width: 'medium' },
     ]
   },
 
@@ -1057,9 +1056,21 @@ function buildPQSection(section, pqData) {
         blockContent.appendChild(buildTableEl(section.id, block.table, existingRows));
       }
       if (block.summaryFields) {
-        const grid = el('div', { className: 'grid', style: { marginTop: '10px' } });
-        block.summaryFields.forEach(f => grid.appendChild(buildFieldEl(f, section.id, 'pq')));
-        blockContent.appendChild(grid);
+        if (section.id === 'family' && block.id === 'children-block' && block.tables?.length === 2) {
+          const totalsWrap = el('div', { className: 'split-tables two-up children-totals', style: { marginTop: '10px' } });
+          const left = el('div');
+          const right = el('div');
+          const numChildrenField = block.summaryFields.find(f => f.key === 'numChildren');
+          const numGrandchildrenField = block.summaryFields.find(f => f.key === 'numGrandchildren');
+          if (numChildrenField) left.appendChild(buildFieldEl(numChildrenField, section.id, 'pq'));
+          if (numGrandchildrenField) right.appendChild(buildFieldEl(numGrandchildrenField, section.id, 'pq'));
+          totalsWrap.append(left, right);
+          blockContent.appendChild(totalsWrap);
+        } else {
+          const grid = el('div', { className: 'grid', style: { marginTop: '10px' } });
+          block.summaryFields.forEach(f => grid.appendChild(buildFieldEl(f, section.id, 'pq')));
+          blockContent.appendChild(grid);
+        }
       }
 
       btn.addEventListener('click', () => {
