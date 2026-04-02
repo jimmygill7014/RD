@@ -511,6 +511,17 @@ td input, td select {
   color: var(--muted);
 }
 
+.split-tables.two-up {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.split-tables.two-up > * {
+  min-width: 0;
+}
+
 /* Table row validation */
 tr.row-valid { background: #f8fdf9; }
 tr.row-warning { background: #fffcf0; }
@@ -1077,4 +1088,5 @@ tr.row-error { background: #fff8f8; }
   .content { padding: 12px; }
   .iap-summary-cards { grid-template-columns: 1fr 1fr; }
   .readiness-grid { grid-template-columns: 1fr; }
+  .split-tables.two-up { grid-template-columns: 1fr; }
 }

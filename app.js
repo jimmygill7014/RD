@@ -204,15 +204,24 @@ const pqSections = [
         toggleLabel: '+ Add Children / Grandchildren',
         hideLabel: '- Remove Children Section',
         flag: 'hasChildren',
-        table: {
-          key: 'children',
-          title: 'Children & Grandchildren',
-          columns: [
-            { key: 'name', label: 'Name' },
-            { key: 'age', label: 'Age', type: 'number' },
-            { key: 'relationship', label: 'Child / Grandchild', type: 'select', options: ['Child', 'Grandchild'] },
-          ]
-        },
+        tables: [
+          {
+            key: 'children',
+            title: 'Children',
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'age', label: 'Age', type: 'number' },
+            ]
+          },
+          {
+            key: 'grandchildren',
+            title: 'Grandchildren',
+            columns: [
+              { key: 'name', label: 'Name' },
+              { key: 'age', label: 'Age', type: 'number' },
+            ]
+          },
+        ],
         summaryFields: [
           { key: 'numChildren', label: '# of Children', type: 'number', width: 'field' },
           { key: 'numGrandchildren', label: '# of Grandchildren', type: 'number', width: 'field' },
@@ -821,7 +830,11 @@ function renderPQ() {
 
   // Restore state from existing data
   if (pq.family?.client2FirstName || pq.family?.hasSpouse) pqState.hasSpouse = true;
-  if (pq.family?.hasChildren || (pq.family?.children && pq.family.children.length)) pqState.hasChildren = true;
+  if (
+    pq.family?.hasChildren ||
+    (pq.family?.children && pq.family.children.length) ||
+    (pq.family?.grandchildren && pq.family.grandchildren.length)
+  ) pqState.hasChildren = true;
   if (pq.employment?.client1?.status) pqState.employmentClient1 = pq.employment.client1.status;
   if (pq.employment?.client2?.status) pqState.employmentClient2 = pq.employment.client2.status;
   // Restore asset checks from dedicated namespace (never conflicts with table data)
@@ -914,7 +927,29 @@ function buildPQSection(section, pqData) {
         style: { marginTop: '10px' }
       });
 
-      if (block.table) {
+      if (block.tables?.length) {
+        const tablesWrap = el('div', { className: 'split-tables two-up' });
+        block.tables.forEach(tbl => {
+          let existingRows = getDeep(pqData, `${section.id}.${tbl.key}`);
+          // Legacy compatibility: older data stored both children/grandchildren
+          // in family.children with a relationship field.
+          if (section.id === 'family') {
+            const legacyRows = getDeep(pqData, 'family.children') || [];
+            const hasLegacyRelationship = Array.isArray(legacyRows) && legacyRows.some(r => r && Object.prototype.hasOwnProperty.call(r, 'relationship'));
+            if (tbl.key === 'children') {
+              if ((!existingRows || !existingRows.length) || hasLegacyRelationship) {
+                existingRows = legacyRows.filter(r => r?.relationship !== 'Grandchild');
+              }
+            } else if (tbl.key === 'grandchildren') {
+              if (!existingRows || !existingRows.length) {
+                existingRows = legacyRows.filter(r => r?.relationship === 'Grandchild');
+              }
+            }
+          }
+          tablesWrap.appendChild(buildTableEl(section.id, tbl, existingRows));
+        });
+        blockContent.appendChild(tablesWrap);
+      } else if (block.table) {
         const existingRows = getDeep(pqData, `${section.id}.${block.table.key}`);
         blockContent.appendChild(buildTableEl(section.id, block.table, existingRows));
       }
@@ -1514,18 +1549,25 @@ function recalcPQComputed() {
   const age2 = form.querySelector('[data-path="family.client2Age"]');
   if (dob2 && age2) age2.value = calcAge(dob2.value);
 
-  // Children/grandchildren count
-  const childRows = form.querySelectorAll('[data-path^="family.children["]');
-  let childCount = 0, grandCount = 0;
-  const seen = new Set();
-  childRows.forEach(inp => {
-    const m = inp.dataset.path.match(/family\.children\[(\d+)\]\.relationship/);
-    if (m && !seen.has(m[1])) {
-      seen.add(m[1]);
-      if (inp.value === 'Child') childCount++;
-      else if (inp.value === 'Grandchild') grandCount++;
-    }
-  });
+  // Children/grandchildren count from separate tables
+  const countRowsWithData = (prefix) => {
+    const rowMap = new Map();
+    form.querySelectorAll(`[data-path^="${prefix}["]`).forEach(inp => {
+      const m = inp.dataset.path.match(/\[(\d+)\]\.(name|age)$/);
+      if (!m) return;
+      const idx = m[1];
+      const key = m[2];
+      const row = rowMap.get(idx) || { hasName: false, hasAge: false };
+      if (key === 'name' && String(inp.value || '').trim() !== '') row.hasName = true;
+      if (key === 'age' && String(inp.value || '').trim() !== '') row.hasAge = true;
+      rowMap.set(idx, row);
+    });
+    let count = 0;
+    rowMap.forEach(r => { if (r.hasName || r.hasAge) count++; });
+    return count;
+  };
+  const childCount = countRowsWithData('family.children');
+  const grandCount = countRowsWithData('family.grandchildren');
   const numC = form.querySelector('[data-path="family.numChildren"]');
   const numG = form.querySelector('[data-path="family.numGrandchildren"]');
   if (numC && !document.activeElement?.isSameNode(numC)) numC.value = childCount || numC.value;
@@ -2228,8 +2270,10 @@ function renderClientSheet() {
     }
 
     if (section.table) {
-      const existingBene = getDeep(store.clientSheet, 'beneficiaries') ||
-        (pq.family?.children || []).map(c => ({ firstName: c.name, relationship: c.relationship }));
+      const existingBene = getDeep(store.clientSheet, 'beneficiaries') || [
+        ...(pq.family?.children || []).map(c => ({ firstName: c.name, relationship: 'Child' })),
+        ...(pq.family?.grandchildren || []).map(c => ({ firstName: c.name, relationship: 'Grandchild' })),
+      ];
       content.appendChild(buildTableEl('clientSheet', section.table, existingBene));
     }
 
