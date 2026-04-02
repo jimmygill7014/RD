@@ -125,6 +125,23 @@ function calcAge(dob) {
   return age;
 }
 
+function getOwnerNameOptions(pqData) {
+  const opts = [];
+  const family = pqData?.family || {};
+  const c1First = (family.client1FirstName || '').trim();
+  const c1Last = (family.client1LastName || '').trim();
+  const c2First = (family.client2FirstName || '').trim();
+  const c2Last = (family.client2LastName || '').trim();
+
+  const c1 = [c1First, c1Last].filter(Boolean).join(' ');
+  const c2 = [c2First, c2Last].filter(Boolean).join(' ');
+  if (c1) opts.push(c1);
+  if (pqState.hasSpouse && c2) opts.push(c2);
+  if (c1 && c2) opts.push('Joint');
+
+  return opts;
+}
+
 function uid() { return '_' + Math.random().toString(36).slice(2, 9); }
 
 function sumArray(arr, key) {
@@ -927,9 +944,20 @@ function buildPQSection(section, pqData) {
 
   // Tables
   if (section.tables) {
+    const ownerOptions = getOwnerNameOptions(pqData);
     section.tables.forEach(t => {
       const existing = getDeep(pqData, `${section.id}.${t.key}`);
-      content.appendChild(buildTableEl(section.id, t, existing));
+      const tableDef = section.id === 'insurance'
+        ? {
+            ...t,
+            columns: (t.columns || []).map(col => (
+              col.key === 'owner'
+                ? { ...col, type: 'datalist', options: ownerOptions }
+                : col
+            )),
+          }
+        : t;
+      content.appendChild(buildTableEl(section.id, tableDef, existing));
     });
   }
 
@@ -1092,19 +1120,7 @@ function renderAssetsSection(section, pqData) {
     { key: 'ownBusiness',   desc: 'Business' },
   ];
 
-  // Build ownership name suggestions from live family data
-  const ownershipOptions = (() => {
-    const opts = [];
-    const f = pqData.family || {};
-    const c1First = (f.client1FirstName || '').trim();
-    const c1Last  = (f.client1LastName  || '').trim();
-    const c2First = (f.client2FirstName || '').trim();
-    const c2Last  = (f.client2LastName  || '').trim();
-    if (c1First || c1Last) opts.push([c1First, c1Last].filter(Boolean).join(' '));
-    if (pqState.hasSpouse && (c2First || c2Last)) opts.push([c2First, c2Last].filter(Boolean).join(' '));
-    if (opts.length === 2) opts.push('Joint');
-    return opts;
-  })();
+  const ownershipOptions = getOwnerNameOptions(pqData);
 
   const reColumns = [
     { key: '_autoKey',      label: '',               hidden: true },
@@ -1242,7 +1258,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'personalAdditions', label: 'Personal Additions', type: 'currency' },
         { key: 'companyMatch', label: 'Company Match', type: 'currency' },
         { key: 'type', label: 'Type' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
         { key: 'beneficiary', label: 'Beneficiary' },
       ]
     }, getDeep(pqData, 'assets.taxDeferred')));
@@ -1258,7 +1274,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'personalAdditions', label: 'Personal Additions', type: 'currency' },
         { key: 'companyMatch', label: 'Company Match', type: 'currency' },
         { key: 'type', label: 'Type' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
         { key: 'beneficiary', label: 'Beneficiary' },
       ]
     }, getDeep(pqData, 'assets.roth')));
@@ -1273,7 +1289,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
         { key: 'personalAdditions', label: 'Personal Additions', type: 'currency' },
         { key: 'costBasis', label: 'Cost Basis', type: 'currency' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
         { key: 'variableFixed', label: 'Variable / Fixed' },
         { key: 'issueDate', label: 'Issue Date', type: 'date' },
         { key: 'beneficiary', label: 'Beneficiary' },
@@ -1290,7 +1306,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
         { key: 'interestRate', label: 'Interest Rate' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.cashCd')));
   }
@@ -1303,7 +1319,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
         { key: 'interestRate', label: 'Interest Rate' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.plan529')));
   }
@@ -1316,7 +1332,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
         { key: 'interestRate', label: 'Interest Rate' },
-        { key: 'ownership', label: 'Ownership' },
+        { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.hsa')));
   }
@@ -1393,14 +1409,17 @@ function renderLiabilitiesSection(section, pqData) {
 /* ----- INCOME ----- */
 function renderIncomeSection(section, pqData) {
   const { wrapper, content } = buildCollapsibleShell(section.id, section.title);
+  const ownerOptions = getOwnerNameOptions(pqData);
+  const primaryOwner = ownerOptions[0] || 'Client 1';
+  const spouseOwner = ownerOptions.find(o => o !== primaryOwner && o !== 'Joint') || 'Client 2 (Spouse)';
 
   // Auto-seed income rows from employment
   const starterRows = [];
   if (pqState.employmentClient1 === 'Employed') {
-    starterRows.push({ type: 'Employment', owner: 'Client 1', description: pqData?.employment?.client1?.employer || '' });
+    starterRows.push({ type: 'Employment', owner: primaryOwner, description: pqData?.employment?.client1?.employer || '' });
   }
   if (pqState.hasSpouse && pqState.employmentClient2 === 'Employed') {
-    starterRows.push({ type: 'Employment', owner: 'Client 2 (Spouse)', description: pqData?.employment?.client2?.employer || '' });
+    starterRows.push({ type: 'Employment', owner: spouseOwner, description: pqData?.employment?.client2?.employer || '' });
   }
 
   const existingIncome = getDeep(pqData, 'income.sources');
@@ -1409,7 +1428,7 @@ function renderIncomeSection(section, pqData) {
     title: 'Income Sources',
     columns: [
       { key: 'type', label: 'Type', type: 'select', options: ['Employment', 'Bonus', 'SSI', 'Pension', 'Rental Income', 'Investment Income', 'Other'] },
-      { key: 'owner', label: 'Owner' },
+      { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
       { key: 'description', label: 'Description' },
       { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
       { key: 'cola', label: 'COLA %', type: 'percent' },
@@ -2537,5 +2556,3 @@ function init() {
 }
 
 init();
-
-
