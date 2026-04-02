@@ -636,10 +636,64 @@ function buildTableEl(sectionId, tableDef, existingData) {
     });
   }
 
+  function editableCells(tr) {
+    return Array.from(tr.querySelectorAll('input, select, textarea')).filter(node => {
+      if (!node || node.disabled || node.readOnly) return false;
+      if (node.tagName === 'INPUT' && node.type === 'hidden') return false;
+      return true;
+    });
+  }
+
+  function rowHasAnyData(tr) {
+    return editableCells(tr).some(node => String(node.value || '').trim() !== '');
+  }
+
   // Expose addRow/reindex so external sync logic can add/update rows
   tbody._addRow = addRow;
   tbody._reindex = reindex;
   tbody._tableDef = tableDef;
+
+  // Enter key moves to next editable cell; at row end, add a new row.
+  tbody.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const tr = target.closest('tr');
+    if (!tr || !tbody.contains(tr)) return;
+
+    const cells = editableCells(tr);
+    const idx = cells.indexOf(target);
+    if (idx === -1) return;
+
+    e.preventDefault();
+    if (idx < cells.length - 1) {
+      cells[idx + 1].focus();
+      return;
+    }
+
+    addRow();
+    reindex();
+    const nextRow = tbody.lastElementChild;
+    if (!nextRow) return;
+    const nextCells = editableCells(nextRow);
+    if (nextCells[0]) nextCells[0].focus();
+  });
+
+  // Remove rows that are left completely blank when focus leaves that row.
+  tbody.addEventListener('focusout', (e) => {
+    const target = e.target;
+    if (!(target instanceof HTMLElement)) return;
+    const tr = target.closest('tr');
+    if (!tr || !tbody.contains(tr)) return;
+
+    setTimeout(() => {
+      if (!tbody.contains(tr)) return;
+      if (tr.contains(document.activeElement)) return;
+      if (rowHasAnyData(tr)) return;
+      tr.remove();
+      reindex();
+    }, 0);
+  });
 
   // Seed rows
   const starters = tableDef.starterRows || [];
