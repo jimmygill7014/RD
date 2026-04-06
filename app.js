@@ -299,7 +299,7 @@ const pqSections = [
     title: 'Goals & Planning Facts',
     fields: [
       { key: 'goals', label: 'Goals', type: 'textarea' },
-      { key: 'estatePlan', label: 'Estate Plan', width: 'medium' },
+      { key: 'estatePlan', label: 'Estate Plan', type: 'multiselect', options: ['Trust', 'Will', 'FPOA', 'MPOA'], width: 'medium' },
       { key: 'estatePlanYear', label: 'Year Established / Updated', width: 'medium' },
     ]
   },
@@ -524,7 +524,35 @@ function buildFieldEl(field, sectionId, formType) {
   let input;
   const path = `${sectionId}.${field.key}`;
 
-  if (field.type === 'textarea') {
+  if (field.type === 'multiselect') {
+    // Render as checkbox group, store as comma-separated string in a hidden input
+    input = el('input', { type: 'hidden' });
+    input.dataset.path = path;
+    input.name = path;
+    const cbGroup = el('div', { className: 'multiselect-group' });
+    (field.options || []).forEach(opt => {
+      const item = el('label', { className: 'multiselect-item' });
+      const cb = el('input', { type: 'checkbox' });
+      cb.dataset.msOption = opt;
+      cb.addEventListener('change', () => {
+        const checked = Array.from(cbGroup.querySelectorAll('input[type="checkbox"]:checked'))
+          .map(c => c.dataset.msOption);
+        input.value = checked.join(', ');
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      item.append(cb, document.createTextNode(' ' + opt));
+      cbGroup.appendChild(item);
+    });
+    wrapper.append(row, cbGroup, input);
+    // Hydrate checkboxes from stored value after a tick (fillForm sets input.value)
+    requestAnimationFrame(() => {
+      const vals = (input.value || '').split(',').map(v => v.trim()).filter(Boolean);
+      cbGroup.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+        cb.checked = vals.includes(cb.dataset.msOption);
+      });
+    });
+    return wrapper;
+  } else if (field.type === 'textarea') {
     input = el('textarea', { rows: '3' });
   } else if (field.type === 'select') {
     input = el('select');
@@ -891,7 +919,8 @@ function syncREToLiabilities() {
     }
   });
 
-  // Trigger dashboard recalc so totals stay current
+  // Trigger expense sync and dashboard recalc so totals stay current
+  syncToExpenses();
   recalcPQComputed();
 }
 
@@ -902,6 +931,211 @@ function setupRELiabSync() {
   // Listen for any input on the RE table and sync to liabilities
   reBody.addEventListener('input', syncREToLiabilities);
   reBody.addEventListener('change', syncREToLiabilities);
+}
+
+/* ---------- LIABILITIES & INSURANCE → EXPENSES LIVE SYNC ---------- */
+function syncToExpenses() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const liabBody = form.querySelector('tbody[data-table-path="liabilities.items"]');
+  const insBody  = form.querySelector('tbody[data-table-path="insurance.policies"]');
+  const expBody  = form.querySelector('tbody[data-table-path="taxesExpenses.expenses"]');
+  if (!expBody) return;
+
+  const rowVal = (tr, key) => tr.querySelector(`[data-path$=".${key}"]`)?.value ?? '';
+  const setRowVal = (tr, key, val) => {
+    const inp = tr.querySelector(`[data-path$=".${key}"]`);
+    if (!inp) return;
+    if (inp.dataset.currencyType === 'currency') {
+      const n = parseCommas(val);
+      inp.value = isNaN(n) || n === 0 ? '' : formatCommas(n);
+    } else {
+      inp.value = val ?? '';
+    }
+  };
+
+  // Collect expected auto-sourced expenses from liabilities
+  const expected = [];
+  if (liabBody) {
+    Array.from(liabBody.querySelectorAll('tr')).forEach((tr, i) => {
+      const desc = rowVal(tr, 'description');
+      const payment = parseCommas(rowVal(tr, 'payment')) || 0;
+      if (payment > 0) {
+        expected.push({ _source: 'liability', _syncKey: 'liab_' + i, description: desc || 'Loan Payment', amount: payment * 12, notes: 'From liabilities' });
+      }
+    });
+  }
+
+  // Collect expected auto-sourced expenses from insurance
+  if (insBody) {
+    Array.from(insBody.querySelectorAll('tr')).forEach((tr, i) => {
+      const company = rowVal(tr, 'company');
+      const premium = parseCommas(rowVal(tr, 'annualPremium')) || 0;
+      if (premium > 0) {
+        expected.push({ _source: 'insurance', _syncKey: 'ins_' + i, description: 'Insurance Premium - ' + (company || 'Unknown'), amount: premium, notes: 'From insurance' });
+      }
+    });
+  }
+
+  // Current expense rows
+  const expRows = Array.from(expBody.querySelectorAll('tr'));
+
+  // Remove stale auto-sourced rows (rows with _source that no longer match)
+  const existingAutoRows = expRows.filter(tr => {
+    const src = rowVal(tr, '_source');
+    return src === 'liability' || src === 'insurance';
+  });
+  existingAutoRows.forEach(tr => {
+    tr.remove();
+  });
+
+  // Add all expected auto-sourced rows
+  expected.forEach(exp => {
+    expBody._addRow(exp);
+  });
+  expBody._reindex();
+
+  recalcPQComputed();
+}
+
+function setupExpenseSync() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const liabBody = form.querySelector('tbody[data-table-path="liabilities.items"]');
+  const insBody  = form.querySelector('tbody[data-table-path="insurance.policies"]');
+  if (liabBody) {
+    liabBody.addEventListener('input', syncToExpenses);
+    liabBody.addEventListener('change', syncToExpenses);
+  }
+  if (insBody) {
+    insBody.addEventListener('input', syncToExpenses);
+    insBody.addEventListener('change', syncToExpenses);
+  }
+}
+
+/* ---------- ASSETS (EBT) → OTHER INCOME LIVE SYNC ---------- */
+function syncAssetToOtherIncome() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const reBody = form.querySelector('tbody[data-table-path="assets.realEstate"]');
+  const otherBody = form.querySelector('tbody[data-table-path="income.other"]');
+  if (!otherBody) return;
+
+  const rowVal = (tr, key) => tr.querySelector(`[data-path$=".${key}"]`)?.value ?? '';
+  const setRowVal = (tr, key, val) => {
+    const inp = tr.querySelector(`[data-path$=".${key}"]`);
+    if (!inp) return;
+    if (inp.dataset.currencyType === 'currency') {
+      const n = parseCommas(val);
+      inp.value = isNaN(n) || n === 0 ? '' : formatCommas(n);
+    } else {
+      inp.value = val ?? '';
+    }
+  };
+
+  // Collect expected auto-sourced rows from assets with EBT income
+  const expected = [];
+  if (reBody) {
+    Array.from(reBody.querySelectorAll('tr')).forEach(tr => {
+      const desc = rowVal(tr, 'description');
+      const ebt = parseCommas(rowVal(tr, 'incomeEBT')) || 0;
+      const ownership = rowVal(tr, 'ownership');
+      if (ebt > 0) {
+        expected.push({ _source: 'asset', owner: ownership, description: desc || 'Asset Income', annualAmount: ebt, notes: 'From assets' });
+      }
+    });
+  }
+
+  // Remove existing auto-sourced rows
+  Array.from(otherBody.querySelectorAll('tr')).forEach(tr => {
+    const src = tr.querySelector('input[data-path$="._source"]');
+    if (src?.value === 'asset') tr.remove();
+  });
+
+  // Fill blank rows first, then add new rows for the rest
+  const tableDef = otherBody._tableDef;
+  const visibleKeys = tableDef?.columns?.filter(c => !c.hidden).map(c => c.key) || [];
+
+  expected.forEach(exp => {
+    // Find a blank row (no _source and all visible fields empty)
+    const blankRow = Array.from(otherBody.querySelectorAll('tr')).find(tr => {
+      const src = rowVal(tr, '_source');
+      if (src) return false;
+      return visibleKeys.every(k => {
+        const v = rowVal(tr, k);
+        return v === '' || v === '—';
+      });
+    });
+
+    if (blankRow) {
+      // Fill the blank row
+      Object.entries(exp).forEach(([k, v]) => setRowVal(blankRow, k, String(v)));
+    } else {
+      otherBody._addRow(exp);
+    }
+  });
+
+  otherBody._reindex();
+  recalcPQComputed();
+}
+
+function setupAssetIncomeSync() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const reBody = form.querySelector('tbody[data-table-path="assets.realEstate"]');
+  if (reBody) {
+    reBody.addEventListener('input', syncAssetToOtherIncome);
+    reBody.addEventListener('change', syncAssetToOtherIncome);
+  }
+}
+
+/* ---------- FAMILY/EMPLOYMENT → EMPLOYMENT INCOME LIVE SYNC ---------- */
+function syncEmploymentFields() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const empBody = form.querySelector('tbody[data-table-path="income.employment"]');
+  if (!empBody) return;
+
+  const c1Name = [
+    (form.querySelector('[data-path="family.client1FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client1LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const c2Name = [
+    (form.querySelector('[data-path="family.client2FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client2LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const c1Employer = (form.querySelector('[data-path="employment.client1.employer"]')?.value || '').trim();
+  const c2Employer = (form.querySelector('[data-path="employment.client2.employer"]')?.value || '').trim();
+
+  empBody.querySelectorAll('tr').forEach(row => {
+    const srcInp = row.querySelector('input[data-path$="._source"]');
+    const ownerInp = row.querySelector('input[data-path$=".owner"]');
+    const descInp = row.querySelector('input[data-path$=".description"]');
+    if (!srcInp || !ownerInp) return;
+    if (srcInp.value === 'client1') {
+      ownerInp.value = c1Name;
+      if (descInp) descInp.value = c1Employer;
+    } else if (srcInp.value === 'client2') {
+      ownerInp.value = c2Name;
+      if (descInp) descInp.value = c2Employer;
+    }
+  });
+}
+
+function setupEmploymentNameSync() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  const watchPaths = [
+    'family.client1FirstName', 'family.client1LastName',
+    'family.client2FirstName', 'family.client2LastName',
+    'employment.client1.employer', 'employment.client2.employer'
+  ];
+  watchPaths.forEach(path => {
+    const inp = form.querySelector(`[data-path="${path}"]`);
+    if (inp) {
+      inp.addEventListener('input', syncEmploymentFields);
+    }
+  });
 }
 
 function renderPQ() {
@@ -946,6 +1180,12 @@ function renderPQ() {
   renderPQDashboard();
   // Wire live RE → Liabilities sync after DOM is fully built
   setupRELiabSync();
+  // Wire live Liabilities & Insurance → Expenses sync
+  setupExpenseSync();
+  // Wire live Assets (EBT) → Other Income sync
+  setupAssetIncomeSync();
+  // Wire live Family Names → Employment Income owner sync
+  setupEmploymentNameSync();
   // Recalc dashboard on any form input (debounced to avoid excessive redraws)
   setupFormRecalc();
 }
@@ -1280,7 +1520,7 @@ function renderAssetsSection(section, pqData) {
     { key: 'marketValue',   label: 'Market Value',   type: 'currency' },
     { key: 'remainingLoan', label: 'Remaining Loan', type: 'currency' },
     { key: 'interestRate',  label: 'Int. Rate',      type: 'percent' },
-    { key: 'term',          label: 'Term (months)' },
+    { key: 'term',          label: 'Term (years)' },
     { key: 'payment',       label: 'Payment',        type: 'currency' },
     { key: 'yearAcquired',  label: 'Year Acquired' },
     { key: 'costBasis',     label: 'Cost Basis',     type: 'currency' },
@@ -1551,7 +1791,7 @@ function renderLiabilitiesSection(section, pqData) {
       { key: 'payment', label: 'Payment', type: 'currency' },
       { key: 'amount', label: 'Amount', type: 'currency' },
       { key: 'interestRate', label: 'Int. Rate', type: 'percent' },
-      { key: 'term', label: 'Term (months)' },
+      { key: 'term', label: 'Term (years)' },
     ],
     starterRows: [],
   }, seedRows));
@@ -1564,30 +1804,121 @@ function renderIncomeSection(section, pqData) {
   const { wrapper, content } = buildCollapsibleShell(section.id, section.title);
   const ownerOptions = getOwnerNameOptions(pqData);
 
-  // Auto-seed income rows from employment
-  const starterRows = [];
+  // ── 1. Employment Income ──
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Employment Income' }));
+  const family = pqData?.family || {};
+  const c1Name = [(family.client1FirstName || '').trim(), (family.client1LastName || '').trim()].filter(Boolean).join(' ');
+  const c2Name = [(family.client2FirstName || '').trim(), (family.client2LastName || '').trim()].filter(Boolean).join(' ');
+
+  // Auto-sourced employment rows
+  const autoEmp = [];
   if (pqState.employmentClient1 === 'Employed') {
-    starterRows.push({ type: 'Employment', description: pqData?.employment?.client1?.employer || '' });
+    autoEmp.push({ _source: 'client1', owner: c1Name, description: pqData?.employment?.client1?.employer || '' });
   }
   if (pqState.hasSpouse && pqState.employmentClient2 === 'Employed') {
-    starterRows.push({ type: 'Employment', description: pqData?.employment?.client2?.employer || '' });
+    autoEmp.push({ _source: 'client2', owner: c2Name, description: pqData?.employment?.client2?.employer || '' });
   }
 
-  const existingIncome = getDeep(pqData, 'income.sources');
+  // Merge: keep auto-sourced rows fresh (update owner/description), preserve manual rows and user-entered amounts
+  let existingEmp = getDeep(pqData, 'income.employment');
+  let mergedEmp;
+  if (existingEmp?.length) {
+    const manualRows = existingEmp.filter(r => r && !r._source);
+    // For auto rows, preserve user-entered fields (annualAmount, retirementDate, cola)
+    const freshAuto = autoEmp.map(auto => {
+      const prev = existingEmp.find(r => r?._source === auto._source);
+      if (prev) {
+        return { ...prev, owner: auto.owner, description: auto.description || prev.description };
+      }
+      return auto;
+    });
+    mergedEmp = [...freshAuto, ...manualRows];
+  } else {
+    mergedEmp = autoEmp.length ? autoEmp : null;
+  }
+
   content.appendChild(buildTableEl('income', {
-    key: 'sources',
-    title: 'Income Sources',
+    key: 'employment',
+    title: 'Employment Income',
     columns: [
-      { key: 'type', label: 'Type', type: 'select', options: ['Employment', 'Bonus', 'SSI', 'Pension', 'Rental Income', 'Investment Income', 'Other'] },
+      { key: '_source', label: '', hidden: true },
       { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
       { key: 'description', label: 'Description' },
       { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
+      { key: 'retirementDate', label: 'Retirement Date', type: 'date' },
       { key: 'cola', label: 'COLA %', type: 'percent' },
-      { key: 'startingAge', label: 'Start Age', type: 'number' },
-      { key: 'fullRetAge', label: 'Full Ret. Age', type: 'number' },
     ],
-    starterRows: existingIncome?.length ? [] : starterRows,
-  }, existingIncome));
+    starterRows: [],
+  }, mergedEmp));
+
+  // ── 2. Social Security ──
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Social Security', style: { marginTop: '18px' } }));
+  const existingSS = getDeep(pqData, 'income.socialSecurity');
+  content.appendChild(buildTableEl('income', {
+    key: 'socialSecurity',
+    title: 'Social Security',
+    columns: [
+      { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
+      { key: 'startingAge', label: 'Starting Age', type: 'number' },
+      { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
+      { key: 'fullRetAge', label: 'Full Ret. Age', type: 'number' },
+      { key: 'cola', label: 'COLA %', type: 'percent' },
+    ],
+    starterRows: [],
+  }, existingSS));
+
+  // ── 3. Pension ──
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Pension', style: { marginTop: '18px' } }));
+  const existingPension = getDeep(pqData, 'income.pension');
+  content.appendChild(buildTableEl('income', {
+    key: 'pension',
+    title: 'Pension',
+    columns: [
+      { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
+      { key: 'startDate', label: 'Start Date', type: 'date' },
+      { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
+      { key: 'survivorBenefit', label: 'Survivor Benefit', type: 'currency' },
+      { key: 'cola', label: 'COLA %', type: 'percent' },
+    ],
+    starterRows: [],
+  }, existingPension));
+
+  // ── 4. Other Income ──
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Other Income', style: { marginTop: '18px' } }));
+
+  // Auto-source from assets with Income (EBT)
+  const autoOther = [];
+  const reData = getDeep(pqData, 'assets.realEstate') || [];
+  reData.forEach(r => {
+    if (r?.incomeEBT && parseFloat(r.incomeEBT) > 0) {
+      autoOther.push({ _source: 'asset', owner: r.ownership || '', description: r.description || 'Asset Income', annualAmount: parseFloat(r.incomeEBT), notes: 'From assets' });
+    }
+  });
+
+  let existingOther = getDeep(pqData, 'income.other');
+  let mergedOther;
+  if (existingOther?.length) {
+    const manualRows = existingOther.filter(r => r && !r._source);
+    mergedOther = [...autoOther, ...manualRows];
+  } else {
+    mergedOther = autoOther.length ? autoOther : null;
+  }
+
+  content.appendChild(buildTableEl('income', {
+    key: 'other',
+    title: 'Other Income',
+    columns: [
+      { key: '_source', label: '', hidden: true },
+      { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
+      { key: 'description', label: 'Description' },
+      { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
+      { key: 'startDate', label: 'Start Date', type: 'date' },
+      { key: 'endDate', label: 'End Date', type: 'date' },
+      { key: 'cola', label: 'COLA %', type: 'percent' },
+      { key: 'notes', label: 'Notes' },
+    ],
+    starterRows: [],
+  }, mergedOther));
 
   // Total income display
   const totalRow = el('div', { className: 'grid', style: { marginTop: '10px' } });
@@ -1620,20 +1951,39 @@ function renderTaxesExpensesSection(section, pqData) {
   content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Expenses', style: { marginTop: '18px' } }));
   content.appendChild(el('p', { className: 'section-note', textContent: 'Known loan payments are prefilled from Liabilities.' }));
 
-  const expenseStarters = [];
+  // Build auto-sourced expense rows from Liabilities and Insurance
+  const autoExpenses = [];
   const liabData = getDeep(pqData, 'liabilities.items') || [];
   liabData.forEach(l => {
     if (l?.payment && parseFloat(l.payment) > 0) {
-      expenseStarters.push({ description: l.description || 'Loan Payment', amount: parseFloat(l.payment) * 12, notes: 'From liabilities' });
+      autoExpenses.push({ _source: 'liability', description: l.description || 'Loan Payment', amount: parseFloat(l.payment) * 12, notes: 'From liabilities' });
     }
   });
-  expenseStarters.push({ description: 'Living Expenses' });
 
-  const existingExp = getDeep(pqData, 'taxesExpenses.expenses');
+  const insuranceData = getDeep(pqData, 'insurance.policies') || [];
+  insuranceData.forEach(p => {
+    if (p?.annualPremium && parseFloat(p.annualPremium) > 0) {
+      autoExpenses.push({ _source: 'insurance', description: 'Insurance Premium - ' + (p.company || 'Unknown'), amount: parseFloat(p.annualPremium), notes: 'From insurance' });
+    }
+  });
+
+  // Merge: always keep auto-sourced rows fresh, preserve manual rows
+  let existingExp = getDeep(pqData, 'taxesExpenses.expenses');
+  let mergedExp;
+  if (existingExp?.length) {
+    // Keep only manually-entered rows (no _source)
+    const manualRows = existingExp.filter(r => r && !r._source);
+    mergedExp = [...autoExpenses, ...manualRows];
+  } else {
+    // First time: auto rows + Living Expenses default
+    mergedExp = [...autoExpenses, { description: 'Living Expenses' }];
+  }
+
   content.appendChild(buildTableEl('taxesExpenses', {
     key: 'expenses',
     title: 'Expense Lines',
     columns: [
+      { key: '_source', label: '', hidden: true },
       { key: 'description', label: 'Description' },
       { key: 'amount', label: 'Annual Amount', type: 'currency' },
       { key: 'startDate', label: 'Start Date', type: 'date' },
@@ -1641,8 +1991,8 @@ function renderTaxesExpensesSection(section, pqData) {
       { key: 'cola', label: 'COLA %', type: 'percent' },
       { key: 'notes', label: 'Notes' },
     ],
-    starterRows: existingExp?.length ? [] : expenseStarters,
-  }, existingExp));
+    starterRows: [],
+  }, mergedExp));
 
   const totalRow = el('div', { className: 'grid', style: { marginTop: '10px' } });
   totalRow.appendChild(buildFieldEl({ key: 'expenseTotal', label: 'Total Expenses', type: 'computed', width: 'medium' }, 'taxesExpenses', 'pq'));
@@ -1695,12 +2045,66 @@ function recalcPQComputed() {
   if (numC && !document.activeElement?.isSameNode(numC)) numC.value = childCount || numC.value;
   if (numG && !document.activeElement?.isSameNode(numG)) numG.value = grandCount || numG.value;
 
-  // Total income
-  const incomeInputs = form.querySelectorAll('[data-path^="income.sources["]');
+  // Total income (same future-date exclusion logic as dashboard)
+  const thisYear = new Date().getFullYear();
+  const isFuture = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return !isNaN(d.getTime()) && d.getFullYear() > thisYear;
+  };
   let totalIncome = 0;
-  incomeInputs.forEach(inp => {
+
+  // Employment — always included
+  form.querySelectorAll('[data-path^="income.employment["]').forEach(inp => {
     if (inp.dataset.path.endsWith('.annualAmount')) totalIncome += parseCommas(inp.value) || 0;
   });
+
+  // Social Security — exclude if startingAge > current age of owner
+  const curAge1 = parseFloat(form.querySelector('[data-path="family.client1Age"]')?.value) || 0;
+  const curAge2 = parseFloat(form.querySelector('[data-path="family.client2Age"]')?.value) || 0;
+  const name1 = [
+    (form.querySelector('[data-path="family.client1FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client1LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const name2 = [
+    (form.querySelector('[data-path="family.client2FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client2LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const ssTb = form.querySelector('tbody[data-table-path="income.socialSecurity"]');
+  if (ssTb) {
+    ssTb.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const startAge = parseFloat(row.querySelector('input[data-path$=".startingAge"]')?.value) || 0;
+      const owner = (row.querySelector('input[data-path$=".owner"]')?.value || '').trim();
+      let ownerAge = curAge1;
+      if (name2 && owner === name2) ownerAge = curAge2;
+      if (startAge > 0 && startAge > ownerAge) return;
+      totalIncome += amt;
+    });
+  }
+
+  // Pension — exclude if startDate is future year
+  const penTb = form.querySelector('tbody[data-table-path="income.pension"]');
+  if (penTb) {
+    penTb.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const sd = row.querySelector('input[data-path$=".startDate"]')?.value || '';
+      if (isFuture(sd)) return;
+      totalIncome += amt;
+    });
+  }
+
+  // Other — exclude if startDate is future year
+  const otherTb = form.querySelector('tbody[data-table-path="income.other"]');
+  if (otherTb) {
+    otherTb.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const sd = row.querySelector('input[data-path$=".startDate"]')?.value || '';
+      if (isFuture(sd)) return;
+      totalIncome += amt;
+    });
+  }
+
   const totalIncEl = form.querySelector('[data-path="income.totalIncome"]');
   if (totalIncEl) totalIncEl.value = fmt$(totalIncome);
 
@@ -1763,8 +2167,66 @@ function renderPQDashboard() {
   // Total Liabilities
   const totalLiabilities = sumInputs('[data-path^="liabilities.items["]', '.amount');
 
-  // Total Income
-  const totalIncome = sumInputs('[data-path^="income.sources["]', '.annualAmount');
+  // Total Income (across all 4 sub-tables, excluding future-dated entries)
+  const currentYear = new Date().getFullYear();
+  let totalIncome = 0;
+
+  // Helper: check if a date string is in a future year
+  const isFutureDate = (dateStr) => {
+    if (!dateStr) return false;
+    const d = new Date(dateStr);
+    return !isNaN(d.getTime()) && d.getFullYear() > currentYear;
+  };
+
+  // Employment — always included (no start date filter)
+  totalIncome += sumInputs('[data-path^="income.employment["]', '.annualAmount');
+
+  // Social Security — exclude if startingAge > current age of the owner
+  const ssTbody = form.querySelector('tbody[data-table-path="income.socialSecurity"]');
+  if (ssTbody) {
+    const age1Val = parseFloat(form.querySelector('[data-path="family.client1Age"]')?.value) || 0;
+    const age2Val = parseFloat(form.querySelector('[data-path="family.client2Age"]')?.value) || 0;
+    const c1NameVal = [
+      (form.querySelector('[data-path="family.client1FirstName"]')?.value || '').trim(),
+      (form.querySelector('[data-path="family.client1LastName"]')?.value || '').trim()
+    ].filter(Boolean).join(' ');
+    const c2NameVal = [
+      (form.querySelector('[data-path="family.client2FirstName"]')?.value || '').trim(),
+      (form.querySelector('[data-path="family.client2LastName"]')?.value || '').trim()
+    ].filter(Boolean).join(' ');
+    ssTbody.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const startAge = parseFloat(row.querySelector('input[data-path$=".startingAge"]')?.value) || 0;
+      const owner = (row.querySelector('input[data-path$=".owner"]')?.value || '').trim();
+      // Determine current age of the owner
+      let ownerAge = age1Val; // default to client 1
+      if (c2NameVal && owner === c2NameVal) ownerAge = age2Val;
+      if (startAge > 0 && startAge > ownerAge) return; // future — skip
+      totalIncome += amt;
+    });
+  }
+
+  // Pension — exclude if startDate is in a future year
+  const penTbody = form.querySelector('tbody[data-table-path="income.pension"]');
+  if (penTbody) {
+    penTbody.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const startDate = row.querySelector('input[data-path$=".startDate"]')?.value || '';
+      if (isFutureDate(startDate)) return; // future — skip
+      totalIncome += amt;
+    });
+  }
+
+  // Other — exclude if startDate is in a future year
+  const otherTbody = form.querySelector('tbody[data-table-path="income.other"]');
+  if (otherTbody) {
+    otherTbody.querySelectorAll('tr').forEach(row => {
+      const amt = parseCommas(row.querySelector('input[data-path$=".annualAmount"]')?.value) || 0;
+      const startDate = row.querySelector('input[data-path$=".startDate"]')?.value || '';
+      if (isFutureDate(startDate)) return; // future — skip
+      totalIncome += amt;
+    });
+  }
 
   // Total Taxes
   let totalTax = 0;
@@ -1772,41 +2234,77 @@ function renderPQDashboard() {
     totalTax += parseCommas(form.querySelector(`[data-path="taxesExpenses.${k}"]`)?.value) || 0;
   });
 
-  // Total Expenses
+  // Total Expenses — split by source
   const totalExpenses = sumInputs('[data-path^="taxesExpenses.expenses["]', '.amount');
+
+  // Liability Payments: sum expense amounts where hidden _source = 'liability'
+  let liabilityPayments = 0;
+  let nonLiabilityExpenses = 0;
+  const expTbody = form.querySelector('tbody[data-table-path="taxesExpenses.expenses"]');
+  if (expTbody) {
+    expTbody.querySelectorAll('tr').forEach(row => {
+      const sourceInp = row.querySelector('input[data-path$="._source"]');
+      const amountInp = row.querySelector('input[data-path$=".amount"]');
+      const amt = parseCommas(amountInp?.value) || 0;
+      if (sourceInp?.value === 'liability') {
+        liabilityPayments += amt;
+      } else {
+        nonLiabilityExpenses += amt;
+      }
+    });
+  }
 
   // Derived metrics
   const totalNetWorth = totalAssets - totalLiabilities;
   const dti = totalIncome > 0 ? (totalLiabilities / totalIncome * 100) : 0;
   const savingsRatio = totalIncome > 0 ? (totalSavings / totalIncome * 100) : 0;
-  const cashFlow = totalIncome - totalTax - totalExpenses - totalSavings;
+  const cashFlow = totalIncome - totalSavings - liabilityPayments - totalTax - nonLiabilityExpenses;
 
-  // ── Financial Summary card ──
+  // ── Balance Sheet card ──
   const card1 = el('div', { className: 'dashboard-card' });
-  card1.appendChild(el('h3', { textContent: 'Financial Summary' }));
-  const metrics = el('ul', { className: 'metric-list' });
+  card1.appendChild(el('h3', { textContent: 'Balance Sheet' }));
+  const bsMetrics = el('ul', { className: 'metric-list' });
   [
-    ['Total Assets', fmt$(totalAssets)],
-    ['Total Liabilities', fmt$(totalLiabilities)],
-    ['Total Net Worth', fmt$(totalNetWorth)],
-    ['Total Savings', fmt$(totalSavings)],
-    ['Total Income', fmt$(totalIncome)],
-    ['Total Taxes', fmt$(totalTax)],
-    ['Total Expenses', fmt$(totalExpenses)],
-  ].forEach(([label, value]) => {
+    ['Total Assets', fmt$(totalAssets), ''],
+    ['Total Liabilities', fmt$(totalLiabilities), ''],
+    ['Total Net Worth', fmt$(totalNetWorth), totalNetWorth >= 0 ? 'positive' : 'negative'],
+  ].forEach(([label, value, colorClass]) => {
     const li = el('li');
     li.appendChild(el('span', { textContent: label }));
-    const cls = (label === 'Total Net Worth')
-      ? `metric-value ${totalNetWorth >= 0 ? 'positive' : 'negative'}`
-      : 'metric-value';
-    li.appendChild(el('strong', { className: cls, textContent: value }));
-    metrics.appendChild(li);
+    li.appendChild(el('strong', { className: `metric-value ${colorClass}`.trim(), textContent: value }));
+    bsMetrics.appendChild(li);
   });
-  card1.appendChild(metrics);
+  card1.appendChild(bsMetrics);
+
+  // ── Yearly Cash Flow card ──
+  const card2 = el('div', { className: 'dashboard-card' });
+  card2.appendChild(el('h3', { textContent: 'Yearly Cash Flow' }));
+  const cfMetrics = el('ul', { className: 'metric-list' });
+
+  const addCFRow = (label, value, colorClass) => {
+    const li = el('li');
+    li.appendChild(el('span', { textContent: label }));
+    li.appendChild(el('strong', { className: `metric-value ${colorClass || ''}`.trim(), textContent: value }));
+    cfMetrics.appendChild(li);
+  };
+
+  addCFRow('Income', fmt$(totalIncome));
+  addCFRow('Savings', fmt$(totalSavings));
+  addCFRow('Liability Payments', fmt$(liabilityPayments));
+  addCFRow('Taxes', fmt$(totalTax));
+  addCFRow('Non-Liability Expenses', fmt$(nonLiabilityExpenses));
+
+  // Divider before Cash Flow
+  const dividerLi = el('li', { style: { borderTop: '1px solid var(--border)', paddingTop: '6px', marginTop: '4px' } });
+  dividerLi.appendChild(el('span', { textContent: 'Cash Flow', style: { fontWeight: '700' } }));
+  dividerLi.appendChild(el('strong', { className: `metric-value ${cashFlow >= 0 ? 'positive' : 'negative'}`, textContent: fmt$(cashFlow) }));
+  cfMetrics.appendChild(dividerLi);
+
+  card2.appendChild(cfMetrics);
 
   // ── Key Ratios card ──
-  const card2 = el('div', { className: 'dashboard-card' });
-  card2.appendChild(el('h3', { textContent: 'Key Ratios' }));
+  const cardRatios = el('div', { className: 'dashboard-card' });
+  cardRatios.appendChild(el('h3', { textContent: 'Key Ratios' }));
   const ratios = el('ul', { className: 'metric-list' });
 
   const addRatio = (label, value, colorClass) => {
@@ -1818,9 +2316,8 @@ function renderPQDashboard() {
 
   addRatio('Debt-to-Income', fmtPct(dti), dti > 40 ? 'negative' : dti > 20 ? 'warning' : 'positive');
   addRatio('Savings Ratio', fmtPct(savingsRatio), savingsRatio >= 20 ? 'positive' : savingsRatio >= 10 ? 'warning' : 'negative');
-  addRatio('Cash Flow', fmt$(cashFlow), cashFlow >= 0 ? 'positive' : 'negative');
 
-  card2.appendChild(ratios);
+  cardRatios.appendChild(ratios);
 
   // Completeness Score
   const card3 = el('div', { className: 'dashboard-card' });
@@ -1834,31 +2331,84 @@ function renderPQDashboard() {
     if (inp.value && inp.value.trim() !== '' && inp.value !== '— Select —') filled++;
   });
   const pct = total > 0 ? Math.round(filled / total * 100) : 0;
-  const scoreDiv = el('div', { className: 'completeness-score' });
-  scoreDiv.appendChild(el('div', { className: 'score-value', textContent: pct + '%' }));
-  scoreDiv.appendChild(el('div', { className: 'score-label', textContent: 'Fields completed' }));
-  card3.appendChild(scoreDiv);
+  const colorClass = pct < 33 ? 'low' : pct < 66 ? 'mid' : 'high';
+  const colorMap = { low: '#dc3545', mid: '#d9a708', high: '#198754' };
+  const strokeColor = colorMap[colorClass];
 
-  const bar = el('div', { className: 'progress-bar' });
-  const fill = el('div', { className: `progress-bar-fill ${pct < 33 ? 'low' : pct < 66 ? 'mid' : 'high'}`, style: { width: pct + '%' } });
-  bar.appendChild(fill);
-  card3.appendChild(bar);
+  // SVG circular progress
+  const ringSize = 90;
+  const strokeWidth = 7;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (pct / 100) * circumference;
 
-  // Notes panel
-  const card4 = el('div', { className: 'dashboard-card notes-panel' });
-  card4.appendChild(el('h3', { textContent: 'Advisor Notes' }));
-  const notesTA = el('textarea', { placeholder: 'Free-form notes...' });
-  notesTA.dataset.path = '_advisorNotes';
-  const store = getStore();
-  if (store._advisorNotes) notesTA.value = store._advisorNotes;
-  notesTA.addEventListener('input', () => {
-    const s = getStore();
-    s._advisorNotes = notesTA.value;
-    saveStore(s);
-  });
-  card4.appendChild(notesTA);
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'completeness-ring');
+  svg.setAttribute('width', ringSize);
+  svg.setAttribute('height', ringSize);
+  svg.setAttribute('viewBox', `0 0 ${ringSize} ${ringSize}`);
 
-  host.append(card1, card2, card3, card4);
+  const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  bgCircle.setAttribute('cx', ringSize / 2);
+  bgCircle.setAttribute('cy', ringSize / 2);
+  bgCircle.setAttribute('r', radius);
+  bgCircle.setAttribute('fill', 'none');
+  bgCircle.setAttribute('stroke', '#e5eaef');
+  bgCircle.setAttribute('stroke-width', strokeWidth);
+
+  const fgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  fgCircle.setAttribute('cx', ringSize / 2);
+  fgCircle.setAttribute('cy', ringSize / 2);
+  fgCircle.setAttribute('r', radius);
+  fgCircle.setAttribute('fill', 'none');
+  fgCircle.setAttribute('stroke', strokeColor);
+  fgCircle.setAttribute('stroke-width', strokeWidth);
+  fgCircle.setAttribute('stroke-linecap', 'round');
+  fgCircle.setAttribute('stroke-dasharray', circumference);
+  fgCircle.setAttribute('stroke-dashoffset', offset);
+  fgCircle.setAttribute('transform', `rotate(-90 ${ringSize / 2} ${ringSize / 2})`);
+  fgCircle.style.transition = 'stroke-dashoffset 400ms ease';
+
+  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+  text.setAttribute('x', '50%');
+  text.setAttribute('y', '50%');
+  text.setAttribute('dominant-baseline', 'central');
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('class', 'ring-pct-text');
+  text.textContent = pct + '%';
+
+  svg.append(bgCircle, fgCircle, text);
+
+  const ringWrapper = el('div', { className: 'completeness-score' });
+  ringWrapper.appendChild(svg);
+  ringWrapper.appendChild(el('div', { className: 'score-label', textContent: 'Fields completed' }));
+  card3.appendChild(ringWrapper);
+
+  host.append(card1, card2, cardRatios);
+
+  // Left panel — Completeness + Advisor Notes
+  const notesHost = document.getElementById('pq-notes-panel');
+  if (notesHost) {
+    notesHost.innerHTML = '';
+
+    // Completeness card
+    notesHost.appendChild(card3);
+
+    // Advisor Notes card
+    const notesCard = el('div', { className: 'dashboard-card notes-panel' });
+    notesCard.appendChild(el('h3', { textContent: 'Advisor Notes' }));
+    const notesTA = el('textarea', { placeholder: 'Free-form notes...' });
+    notesTA.dataset.path = '_advisorNotes';
+    const store = getStore();
+    if (store._advisorNotes) notesTA.value = store._advisorNotes;
+    notesTA.addEventListener('input', () => {
+      const s = getStore();
+      s._advisorNotes = notesTA.value;
+      saveStore(s);
+    });
+    notesCard.appendChild(notesTA);
+    notesHost.appendChild(notesCard);
+  }
 }
 
 /* ==========================================================================
@@ -1919,7 +2469,10 @@ function renderPQReview() {
     ['assets.taxable', 'Taxable Accounts'],
     ['liabilities.items', 'Liabilities'],
     ['insurance.policies', 'Insurance'],
-    ['income.sources', 'Income Sources'],
+    ['income.employment', 'Employment Income'],
+    ['income.socialSecurity', 'Social Security'],
+    ['income.pension', 'Pension'],
+    ['income.other', 'Other Income'],
     ['taxesExpenses.expenses', 'Expenses'],
   ];
   tableChecks.forEach(([path, label]) => {
