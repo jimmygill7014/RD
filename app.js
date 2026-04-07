@@ -74,8 +74,7 @@ function findSectionEl(sectionId) {
 
 /* ---------- CONSTANTS ---------- */
 const STORE_KEY = 'pfa-intake-v2';
-const STAGES = ['pq', 'pq-review', 'plan', 'iap', 'client'];
-let currentScreen = 'pq';
+/* PQ-only app — single stage */
 
 /* ---------- UTILITY FUNCTIONS ---------- */
 function el(tag, attrs = {}, children = []) {
@@ -83,7 +82,7 @@ function el(tag, attrs = {}, children = []) {
   Object.entries(attrs).forEach(([k, v]) => {
     if (k === 'className') node.className = v;
     else if (k === 'textContent') node.textContent = v;
-    else if (k === 'innerHTML') node.innerHTML = v;
+    // innerHTML intentionally omitted for Lightning Web Security compatibility
     else if (k.startsWith('on')) node.addEventListener(k.slice(2).toLowerCase(), v);
     else if (k === 'dataset') Object.entries(v).forEach(([dk, dv]) => node.dataset[dk] = dv);
     else if (k === 'style' && typeof v === 'object') Object.assign(node.style, v);
@@ -172,11 +171,16 @@ function getOwnerNameOptions(pqData) {
   if (c1) opts.push(c1);
   if ((pqState.hasSpouse || c2First || c2Last) && c2) opts.push(c2);
   if (c1 && c2) opts.push('Joint');
+  opts.push('Trust');
 
   return opts;
 }
 
 function uid() { return '_' + Math.random().toString(36).slice(2, 9); }
+
+function clearChildren(node) {
+  while (node.firstChild) node.removeChild(node.firstChild);
+}
 
 function sumArray(arr, key) {
   if (!Array.isArray(arr)) return 0;
@@ -193,7 +197,6 @@ function getStore() {
 function saveStore(data) {
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
   refreshConsole();
-  updatePipeline();
 }
 
 function refreshConsole() {
@@ -378,129 +381,7 @@ const pqSections = [
   },
 ];
 
-/* ---------- PLAN SCHEMA ---------- */
-const planSections = [
-  {
-    id: 'documents',
-    title: 'Planning Documents Checklist',
-    fields: [
-      { key: 'investmentStatementsOnFile', label: 'Investment Statements on File', type: 'select', options: ['Yes', 'No', 'Pending'] },
-      { key: 'taxReturnOnFile', label: 'Tax Return on File', type: 'select', options: ['Yes', 'No', 'Pending'] },
-      { key: 'planningLiteRequested', label: 'Planning Lite Requested?', type: 'select', options: ['Yes', 'No'] },
-      { key: 'dateEmailRequest', label: 'Date E-mail Request', type: 'date' },
-    ]
-  },
-  {
-    id: 'householdConfirm',
-    title: 'Household Facts to Confirm',
-    note: 'These fields are prefilled from the PQ. Please confirm or update each one.',
-    fields: [
-      { key: 'clientName', label: 'Client Name', width: 'medium', prefillFrom: 'family.client1FirstName+family.client1LastName' },
-      { key: 'spouseName', label: 'Spouse Name', width: 'medium', prefillFrom: 'family.client2FirstName+family.client2LastName' },
-      { key: 'clientAge', label: 'Client Age', type: 'number', prefillFrom: '_computed_client1Age' },
-      { key: 'spouseAge', label: 'Spouse Age', type: 'number', prefillFrom: '_computed_client2Age' },
-      { key: 'clientEmployment', label: 'Client Employment', width: 'wide', prefillFrom: 'employment.client1.status' },
-      { key: 'spouseEmployment', label: 'Spouse Employment', width: 'wide', prefillFrom: 'employment.client2.status' },
-      { key: 'clientRetirementDate', label: 'Client Retirement Date', type: 'date', prefillFrom: 'employment.client1.retirementDate' },
-      { key: 'spouseRetirementDate', label: 'Spouse Retirement Date', type: 'date', prefillFrom: 'employment.client2.retirementDate' },
-      { key: 'eMoneyRorPre', label: 'eMoney RoR (pre-retirement)' },
-      { key: 'eMoneyRorPost', label: 'eMoney RoR (post-retirement)' },
-      { key: 'baseFacts', label: 'Notes - Base Facts', type: 'textarea' },
-    ]
-  },
-  {
-    id: 'observations',
-    title: 'Planning Assumptions & Observations',
-    fields: [
-      { key: 'currentCashFlow', label: 'Current Cash-Flow', type: 'select', options: ['Surplus', 'Deficit', 'Break-even'] },
-      { key: 'maxingRetirement', label: 'Maxing Employer Retirement Plan?', type: 'select', options: ['Yes', 'No', 'N/A'] },
-      { key: 'excessCash', label: 'Where is Excess Cash Going?', width: 'wide' },
-      { key: 'pullingFrom', label: 'Where Pulling Money From?', width: 'wide' },
-      { key: 'cashReserves', label: 'How Much Extra Cash Reserves?', width: 'wide' },
-      { key: 'onTrack', label: 'On Track to Retire?', type: 'select', options: ['Yes', 'No', 'Unknown'] },
-      { key: 'observationNotes', label: 'Observation Notes', type: 'textarea', prefillFrom: 'goals.goals' },
-    ]
-  },
-  {
-    id: 'taxes',
-    title: 'Tax Observations & Strategies',
-    fields: [
-      { key: 'filingStatus', label: 'Filing Status', type: 'select', options: ['Single', 'Married Filing Jointly', 'Married Filing Separately', 'Head of Household'] },
-      { key: 'taxDifferences', label: 'Differences from Prior Tax Return', width: 'wide' },
-      { key: 'taxBeforeRmd', label: 'Taxes Before RMD Start', type: 'select', options: ['Higher', 'Lower', 'Same'] },
-      { key: 'taxAfterRmd', label: 'Taxes After RMD Start', type: 'select', options: ['Higher', 'Lower', 'Same'] },
-      { key: 'charitablyInclined', label: 'Charitably Inclined?', type: 'select', options: ['Yes', 'No'] },
-      { key: 'rothConversion', label: 'Roth Conversion Strategy', width: 'wide' },
-      { key: 'capitalGains', label: 'Capital Gains Strategy', width: 'wide' },
-      { key: 'charitableStrategies', label: 'Charitable Strategies', width: 'wide' },
-      { key: 'otherTax', label: 'Other Tax Strategies', width: 'wide' },
-    ]
-  },
-  {
-    id: 'retirement',
-    title: 'Cash Flow / Retirement Planning',
-    fields: [
-      { key: 'cashReservesStrategy', label: 'Cash Reserves Strategy', width: 'wide' },
-      { key: 'ssClaiming', label: 'SS Claiming Strategy', width: 'wide' },
-      { key: 'otherCashFlow', label: 'Other Cash Flow Strategies', width: 'wide' },
-    ]
-  },
-  {
-    id: 'investment',
-    title: 'Investment Planning',
-    fields: [
-      { key: 'pureIps', label: 'Pure IPS' },
-      { key: 'outside401k', label: 'Outside 401(k) Request', type: 'select', options: ['Requested', 'Not Requested'] },
-      { key: 'annuityStrategy', label: 'Annuity Strategy', width: 'wide' },
-      { key: 'otherInvestment', label: 'Other Investment Requests', width: 'wide' },
-    ]
-  },
-  {
-    id: 'insurancePlan',
-    title: 'Insurance / Risk Management',
-    fields: [
-      { key: 'lifeInsurance', label: 'Life Insurance', width: 'wide' },
-      { key: 'pAndC', label: 'P&C', width: 'wide' },
-      { key: 'ltdDisability', label: 'LTD / Disability', width: 'wide' },
-    ]
-  },
-  {
-    id: 'estatePlan',
-    title: 'Estate Planning',
-    fields: [
-      { key: 'estatePlan', label: 'Estate Plan', width: 'wide', prefillFrom: 'goals.estatePlan' },
-      { key: 'estateDetails', label: 'Estate Planning Details', width: 'wide' },
-      { key: 'estateOptions', label: 'Estate Plan Options', width: 'wide' },
-    ]
-  },
-  {
-    id: 'recommendations',
-    title: 'Recommendations Summary',
-    fields: [
-      { key: 'recommendationNotes', label: 'Recommendations', type: 'textarea' },
-    ]
-  },
-  {
-    id: 'accountsToEstablish',
-    title: 'Accounts to Establish / Use',
-    note: 'Structured rows for accounts that need to be opened or used for this plan.',
-    tables: [
-      {
-        key: 'accounts',
-        columns: [
-          { key: 'accountType', label: 'Account Type' },
-          { key: 'owner', label: 'Owner' },
-          { key: 'registration', label: 'Registration' },
-          { key: 'custodian', label: 'Custodian' },
-          { key: 'purpose', label: 'Purpose' },
-          { key: 'fundingMethod', label: 'Funding Method' },
-          { key: 'beneficiaryNeeded', label: 'Bene. Needed?', type: 'select', options: ['Yes', 'No'] },
-          { key: 'notes', label: 'Notes' },
-        ]
-      }
-    ]
-  },
-];
+/* Plan, IAP, and Client schemas removed — PQ-only app */
 
 /* ==========================================================================
    RENDERING ENGINE
@@ -635,7 +516,7 @@ function buildTableEl(sectionId, tableDef, existingData) {
         } else {
           // Refresh options in case names changed
           const dl = document.getElementById(listId);
-          dl.innerHTML = '';
+          clearChildren(dl);
           (col.options || []).forEach(o => {
             const opt = document.createElement('option');
             opt.value = o;
@@ -1143,7 +1024,7 @@ function renderPQ() {
   snapshotPQForm();
 
   const host = document.getElementById('pq-form-sections');
-  host.innerHTML = '';
+  clearChildren(host);
   const store = getStore();
   const saved = store.pqTemplate || {};
   // Merge: saved store data as base, then overlay the in-flight draft
@@ -1340,7 +1221,7 @@ function buildPQSection(section, pqData) {
         ? {
             ...t,
             columns: (t.columns || []).map(col => (
-              col.key === 'owner'
+              col.key === 'owner' || col.key === 'insured'
                 ? { ...col, type: 'datalist', options: ownerOptions }
                 : col
             )),
@@ -1521,7 +1402,7 @@ function renderAssetsSection(section, pqData) {
     { key: 'remainingLoan', label: 'Remaining Loan', type: 'currency' },
     { key: 'interestRate',  label: 'Int. Rate',      type: 'percent' },
     { key: 'term',          label: 'Term (years)' },
-    { key: 'payment',       label: 'Payment',        type: 'currency' },
+    { key: 'payment',       label: 'Payment (P&I)',   type: 'currency' },
     { key: 'yearAcquired',  label: 'Year Acquired' },
     { key: 'costBasis',     label: 'Cost Basis',     type: 'currency' },
     { key: 'ownership',     label: 'Ownership',      type: 'datalist', options: ownershipOptions },
@@ -1788,7 +1669,7 @@ function renderLiabilitiesSection(section, pqData) {
     columns: [
       { key: '_reKey', label: '', hidden: true },
       { key: 'description', label: 'Description' },
-      { key: 'payment', label: 'Payment', type: 'currency' },
+      { key: 'payment', label: 'Payment (P&I)', type: 'currency' },
       { key: 'amount', label: 'Amount', type: 'currency' },
       { key: 'interestRate', label: 'Int. Rate', type: 'percent' },
       { key: 'term', label: 'Term (years)' },
@@ -2132,7 +2013,7 @@ function recalcPQComputed() {
 function renderPQDashboard() {
   const host = document.getElementById('pq-dashboard');
   if (!host) return;
-  host.innerHTML = '';
+  clearChildren(host);
   const form = document.getElementById('pq-form');
   if (!form) return;
 
@@ -2389,7 +2270,7 @@ function renderPQDashboard() {
   // Left panel — Completeness + Advisor Notes
   const notesHost = document.getElementById('pq-notes-panel');
   if (notesHost) {
-    notesHost.innerHTML = '';
+    clearChildren(notesHost);
 
     // Completeness card
     notesHost.appendChild(card3);
@@ -2411,712 +2292,8 @@ function renderPQDashboard() {
   }
 }
 
-/* ==========================================================================
-   PQ REVIEW SCREEN
-   ========================================================================== */
+/* Plan Review, Plan Design, IAP, and Client Info Sheet stages removed — PQ-only app */
 
-function renderPQReview() {
-  const host = document.getElementById('pq-review-content');
-  host.innerHTML = '';
-  const store = getStore();
-  const pq = store.pqTemplate || {};
-
-  const categories = {
-    'Ready for Planning': [],
-    'Missing for Planning': [],
-    'Missing for Account Opening': [],
-    'Missing for Schwab Application': [],
-  };
-
-  // Classify fields
-  const planningRequired = ['family.client1FirstName', 'family.client1LastName', 'family.client1DOB', 'goals.goals'];
-  const accountOpeningRequired = ['contact.address1', 'contact.city', 'contact.state', 'contact.zip', 'contact.client1Cell', 'contact.client1Email'];
-  const schwabRequired = ['family.client1FirstName', 'family.client1LastName', 'family.client1DOB', 'contact.address1', 'contact.city', 'contact.state', 'contact.zip'];
-
-  function checkField(path, label) {
-    const val = getDeep(pq, path);
-    const has = val != null && String(val).trim() !== '';
-    if (has) {
-      categories['Ready for Planning'].push({ label, value: String(val).slice(0, 60) });
-    } else {
-      if (planningRequired.includes(path)) categories['Missing for Planning'].push({ label });
-      if (accountOpeningRequired.includes(path)) categories['Missing for Account Opening'].push({ label });
-      if (schwabRequired.includes(path)) categories['Missing for Schwab Application'].push({ label });
-    }
-  }
-
-  // Walk through key fields
-  checkField('family.client1FirstName', 'Client First Name');
-  checkField('family.client1LastName', 'Client Last Name');
-  checkField('family.client1DOB', 'Client DOB');
-  checkField('family.client2FirstName', 'Spouse First Name');
-  checkField('family.client2LastName', 'Spouse Last Name');
-  checkField('contact.address1', 'Address');
-  checkField('contact.city', 'City');
-  checkField('contact.state', 'State');
-  checkField('contact.zip', 'Zip');
-  checkField('contact.client1Cell', 'Client Cell');
-  checkField('contact.client1Email', 'Client Email');
-  checkField('employment.client1.status', 'Client Employment Status');
-  checkField('goals.goals', 'Goals');
-  checkField('goals.estatePlan', 'Estate Plan');
-
-  // Count asset / income / expense tables
-  const tableChecks = [
-    ['assets.realEstate', 'Real Estate Assets'],
-    ['assets.taxDeferred', 'Tax-Deferred Accounts'],
-    ['assets.roth', 'Roth Accounts'],
-    ['assets.taxable', 'Taxable Accounts'],
-    ['liabilities.items', 'Liabilities'],
-    ['insurance.policies', 'Insurance'],
-    ['income.employment', 'Employment Income'],
-    ['income.socialSecurity', 'Social Security'],
-    ['income.pension', 'Pension'],
-    ['income.other', 'Other Income'],
-    ['taxesExpenses.expenses', 'Expenses'],
-  ];
-  tableChecks.forEach(([path, label]) => {
-    const arr = getDeep(pq, path);
-    if (Array.isArray(arr) && arr.length && arr.some(hasData)) {
-      categories['Ready for Planning'].push({ label, value: `${arr.length} row(s)` });
-    } else {
-      categories['Missing for Planning'].push({ label });
-    }
-  });
-
-  const grid = el('div', { className: 'review-grid' });
-  Object.entries(categories).forEach(([title, items]) => {
-    const pane = el('div', { className: 'review-pane' });
-    const badgeClass = title.includes('Ready') ? 'badge-green' : title.includes('Schwab') ? 'badge-red' : 'badge-yellow';
-    const hdr = el('div', { className: 'pane-header' });
-    hdr.appendChild(el('span', { textContent: title }));
-    hdr.appendChild(el('span', { className: `review-count-badge ${badgeClass}`, textContent: String(items.length) }));
-    pane.appendChild(hdr);
-
-    const body = el('div', { className: 'pane-body' });
-    if (!items.length) {
-      body.appendChild(el('p', { className: 'section-note', textContent: 'None' }));
-    } else {
-      const list = el('ul', { className: 'review-list' });
-      items.forEach(item => {
-        const li = el('li');
-        li.appendChild(el('span', { className: 'item-label', textContent: item.label }));
-        if (item.value) li.appendChild(el('span', { className: 'item-value', textContent: item.value }));
-        list.appendChild(li);
-      });
-      body.appendChild(list);
-    }
-    pane.appendChild(body);
-    grid.appendChild(pane);
-  });
-
-  host.appendChild(grid);
-}
-
-/* ==========================================================================
-   STAGE 2: PLAN DESIGN
-   ========================================================================== */
-
-const planPrefillBaseline = {};
-
-function renderPlan() {
-  const host = document.getElementById('plan-form-sections');
-  host.innerHTML = '';
-  const store = getStore();
-  const pq = store.pqTemplate || {};
-
-  planSections.forEach((section, si) => {
-    const wrapper = el('section', { className: 'form-section' });
-    const header = el('div', { className: 'section-header' });
-    header.appendChild(el('h2', { textContent: section.title }));
-    const toggleBtn = el('button', { type: 'button', className: 'toggle-btn', textContent: si < 3 ? '\u2212' : '+' });
-    header.appendChild(toggleBtn);
-    wrapper.appendChild(header);
-
-    const content = el('div', { className: 'section-content' + (si < 3 ? '' : ' collapsed') });
-    if (section.note) content.appendChild(el('p', { className: 'section-note', textContent: section.note }));
-
-    if (section.fields?.length) {
-      const grid = el('div', { className: 'grid' });
-      section.fields.forEach(f => grid.appendChild(buildFieldEl(f, section.id, 'plan')));
-      content.appendChild(grid);
-    }
-    if (section.tables) {
-      section.tables.forEach(t => {
-        const existing = getDeep(store.planOrder, `${section.id}.${t.key}`);
-        content.appendChild(buildTableEl(section.id, t, existing));
-      });
-    }
-
-    header.addEventListener('click', () => {
-      const c = content.classList.contains('collapsed');
-      content.classList.toggle('collapsed', !c);
-      toggleBtn.textContent = c ? '\u2212' : '+';
-    });
-
-    wrapper.appendChild(content);
-    host.appendChild(wrapper);
-  });
-
-  // Prefill from PQ
-  prefillPlanFromPQ();
-}
-
-function prefillPlanFromPQ() {
-  const store = getStore();
-  const pq = store.pqTemplate || {};
-  const plan = store.planOrder || {};
-  const form = document.getElementById('plan-form');
-  Object.keys(planPrefillBaseline).forEach(k => delete planPrefillBaseline[k]);
-
-  // Fill already-saved plan data first
-  fillForm(form, plan);
-
-  // Now attempt prefill for fields that have prefillFrom
-  planSections.forEach(section => {
-    (section.fields || []).forEach(field => {
-      if (!field.prefillFrom) return;
-      const path = `${section.id}.${field.key}`;
-      const inp = form.querySelector(`[data-path="${path}"]`);
-      if (!inp) return;
-
-      // If plan already has a saved value, mark green
-      const saved = getDeep(plan, path);
-      if (saved != null && String(saved).trim() !== '') {
-        inp.value = saved;
-        setPlanFlag(path, 'flag-green');
-        return;
-      }
-
-      // Try to compute prefill
-      let val;
-      if (field.prefillFrom === '_computed_client1Age') {
-        val = calcAge(pq.family?.client1DOB);
-      } else if (field.prefillFrom === '_computed_client2Age') {
-        val = calcAge(pq.family?.client2DOB);
-      } else if (field.prefillFrom.includes('+')) {
-        // Concatenate fields
-        val = field.prefillFrom.split('+').map(p => getDeep(pq, p)).filter(Boolean).join(' ');
-      } else {
-        val = getDeep(pq, field.prefillFrom);
-      }
-
-      if (val != null && String(val).trim() !== '') {
-        inp.value = val;
-        planPrefillBaseline[path] = String(val);
-        setPlanFlag(path, 'flag-yellow');
-      } else {
-        setPlanFlag(path, 'flag-red');
-      }
-    });
-  });
-
-  // Color remaining fields
-  form.querySelectorAll('[data-path]').forEach(inp => {
-    const path = inp.dataset.path;
-    const wrapper = inp.closest('.field, .field-medium, .field-wide, .field-full, .field-2');
-    if (!wrapper) return;
-    if (wrapper.classList.contains('flag-yellow') || wrapper.classList.contains('flag-green')) return;
-    if (inp.value && inp.value.trim() !== '') {
-      setPlanFlag(path, 'flag-green');
-    } else {
-      setPlanFlag(path, 'flag-red');
-    }
-  });
-}
-
-function setPlanFlag(path, flag) {
-  const inp = document.querySelector(`#plan-form [data-path="${path}"]`);
-  if (!inp) return;
-  const w = inp.closest('.field, .field-medium, .field-wide, .field-full, .field-2');
-  if (!w) return;
-  w.classList.remove('flag-red', 'flag-yellow', 'flag-green');
-  w.classList.add(flag);
-}
-
-function onPlanInput(e) {
-  const inp = e.target;
-  if (!inp?.dataset?.path) return;
-  const path = inp.dataset.path;
-  const val = String(inp.value || '');
-  const baseline = planPrefillBaseline[path];
-  if (val === '') { setPlanFlag(path, 'flag-red'); return; }
-  if (baseline && val === baseline) { setPlanFlag(path, 'flag-yellow'); return; }
-  setPlanFlag(path, 'flag-green');
-}
-
-/* ==========================================================================
-   STAGE 3: INVESTMENT ACTION PLAN
-   ========================================================================== */
-
-function renderIAP() {
-  const host = document.getElementById('iap-content');
-  host.innerHTML = '';
-  const store = getStore();
-  const iap = store.investmentActionPlan || {};
-
-  // Summary cards
-  const cards = el('div', { className: 'iap-summary-cards' });
-  const cardDefs = [
-    { label: 'Target Allocation', key: 'targetAllocation', default: 'Not Set' },
-    { label: 'Est. Total Assets', key: 'estimatedTotalAssets', format: true },
-    { label: 'Est. Total Transfers', key: 'estimatedTotalTransfers', format: true },
-    { label: 'Beneficiary Instruction', key: 'beneficiaryInstruction', default: 'TBD' },
-  ];
-  cardDefs.forEach(def => {
-    const card = el('div', { className: 'iap-card' });
-    card.appendChild(el('div', { className: 'card-label', textContent: def.label }));
-    let val = iap[def.key] || def.default || '$0';
-    if (def.format && typeof val === 'number') val = fmt$(val);
-    card.appendChild(el('div', { className: 'card-value', textContent: val || '$0' }));
-    cards.appendChild(card);
-  });
-  host.appendChild(cards);
-
-  // Editable summary fields
-  const summarySection = el('section', { className: 'form-section' });
-  const summaryHeader = el('div', { className: 'section-header static-header' });
-  summaryHeader.appendChild(el('h2', { textContent: 'Investment Action Plan Details' }));
-  summarySection.appendChild(summaryHeader);
-  const summaryContent = el('div', { className: 'section-content' });
-
-  const summaryGrid = el('div', { className: 'grid' });
-  [
-    { key: 'targetAllocation', label: 'Target Asset Allocation', width: 'medium' },
-    { key: 'estimatedTotalAssets', label: 'Estimated Total Assets', type: 'number', width: 'medium' },
-    { key: 'estimatedTotalTransfers', label: 'Estimated Total Transfers', type: 'number', width: 'medium' },
-    { key: 'beneficiaryInstruction', label: 'Beneficiary Designation Instruction', width: 'wide' },
-    { key: 'capitalGainsNotes', label: 'Capital Gains / Tax Notes', type: 'textarea' },
-  ].forEach(f => summaryGrid.appendChild(buildFieldEl(f, 'iap', 'iap')));
-  summaryContent.appendChild(summaryGrid);
-  summarySection.appendChild(summaryContent);
-  host.appendChild(summarySection);
-
-  // Action rows by category
-  const categories = ['Qualified Accounts', 'Roth Accounts', 'Non-Qualified Accounts', 'Other / Insurance / Cash'];
-  const catKeys = ['qualified', 'roth', 'nonQualified', 'other'];
-
-  categories.forEach((catLabel, ci) => {
-    const section = el('section', { className: 'form-section' });
-    const hdr = el('div', { className: 'section-header' });
-    hdr.appendChild(el('h2', { textContent: catLabel }));
-    const toggleBtn = el('button', { type: 'button', className: 'toggle-btn', textContent: '\u2212' });
-    hdr.appendChild(toggleBtn);
-    section.appendChild(hdr);
-
-    const content = el('div', { className: 'section-content' });
-    const existingRows = getDeep(iap, `actionRows.${catKeys[ci]}`);
-    content.appendChild(buildTableEl(`iap.actionRows`, {
-      key: catKeys[ci],
-      columns: [
-        { key: 'owner', label: 'Owner' },
-        { key: 'sourceAccount', label: 'Source Account' },
-        { key: 'totalAmount', label: 'Total Amount', type: 'number' },
-        { key: 'feeOrSurrender', label: 'Fee/Surrender', type: 'number' },
-        { key: 'action', label: 'Action' },
-        { key: 'transferAmount', label: 'Transfer Amt', type: 'number' },
-        { key: 'receivingAccount', label: 'Receiving Account' },
-        { key: 'newAccount', label: 'New Acct?', type: 'select', options: ['No', 'Yes'] },
-        { key: 'needsStatement', label: 'Stmt Needed?', type: 'select', options: ['No', 'Yes'] },
-        { key: 'status', label: 'Status', type: 'select', options: ['Pending', 'Validated', 'Rejected', 'TBD'] },
-        { key: 'notes', label: 'Notes' },
-      ]
-    }, existingRows));
-
-    hdr.addEventListener('click', () => {
-      const c = content.classList.contains('collapsed');
-      content.classList.toggle('collapsed', !c);
-      toggleBtn.textContent = c ? '\u2212' : '+';
-    });
-
-    section.appendChild(content);
-    host.appendChild(section);
-  });
-
-  // Fill saved data
-  fillForm(host, iap);
-
-  // Validation warnings
-  renderIAPWarnings(host);
-}
-
-function renderIAPWarnings(host) {
-  const warningSection = el('section', { className: 'form-section' });
-  const hdr = el('div', { className: 'section-header static-header' });
-  hdr.appendChild(el('h2', { textContent: 'Validation Warnings' }));
-  warningSection.appendChild(hdr);
-
-  const content = el('div', { className: 'section-content' });
-  const warnings = collectIAPWarnings();
-
-  if (!warnings.length) {
-    content.appendChild(el('p', { className: 'section-note', textContent: 'No warnings — all action rows look valid.' }));
-  } else {
-    const list = el('ul', { className: 'blocker-list' });
-    warnings.forEach(w => {
-      const li = el('li');
-      li.appendChild(el('span', { className: 'blocker-icon', textContent: w.level === 'error' ? '\u26d4' : '\u26a0' }));
-      li.appendChild(el('span', { textContent: w.message }));
-      list.appendChild(li);
-    });
-    content.appendChild(list);
-  }
-
-  warningSection.appendChild(content);
-  host.appendChild(warningSection);
-}
-
-function collectIAPWarnings() {
-  const warnings = [];
-  const form = document.getElementById('iap-content');
-  if (!form) return warnings;
-
-  // Check each action row for issues
-  const rows = form.querySelectorAll('tbody tr');
-  rows.forEach((row, i) => {
-    const inputs = row.querySelectorAll('[data-path]');
-    const vals = {};
-    inputs.forEach(inp => {
-      const key = inp.dataset.path.split('.').pop();
-      vals[key] = inp.value;
-    });
-
-    if (vals.action && (vals.action.toLowerCase().includes('transfer') || vals.action.toLowerCase().includes('rollover'))) {
-      if (!vals.receivingAccount || vals.receivingAccount.trim() === '') {
-        warnings.push({ level: 'error', message: `Row ${i + 1}: Transfer/rollover action but no receiving account specified.` });
-      }
-    }
-    if (vals.newAccount === 'Yes') {
-      warnings.push({ level: 'warning', message: `Row ${i + 1}: New account must be opened — ensure account-opening instructions exist.` });
-    }
-    if (vals.needsStatement === 'Yes') {
-      warnings.push({ level: 'warning', message: `Row ${i + 1}: Statement needed — mark as resolved before final submission.` });
-    }
-    if (vals.status === 'TBD') {
-      warnings.push({ level: 'warning', message: `Row ${i + 1}: Status is TBD — needs resolution.` });
-    }
-  });
-
-  return warnings;
-}
-
-/* ==========================================================================
-   STAGE 4: CLIENT INFO SHEET / SCHWAB READINESS
-   ========================================================================== */
-
-function renderClientSheet() {
-  const host = document.getElementById('client-content');
-  host.innerHTML = '';
-  const store = getStore();
-  const pq = store.pqTemplate || {};
-
-  // Build structured review sections
-  const sections = [
-    {
-      title: 'Client 1 Legal Identity',
-      fields: [
-        { key: 'legalFirstName', label: 'Legal First Name', source: 'family.client1FirstName', required: true },
-        { key: 'middleInitial', label: 'Middle Initial' },
-        { key: 'legalLastName', label: 'Legal Last Name', source: 'family.client1LastName', required: true },
-        { key: 'dob', label: 'Date of Birth', type: 'date', source: 'family.client1DOB', required: true },
-        { key: 'ssn', label: 'Social Security Number', masked: true, required: true },
-        { key: 'citizenship', label: 'Citizenship', required: true },
-        { key: 'dlState', label: "Driver's License State", required: true },
-        { key: 'dlNumber', label: "Driver's License Number", masked: true, required: true },
-        { key: 'dlExpiration', label: 'DL Expiration', type: 'date', required: true },
-        { key: 'cellPhone', label: 'Cell Phone', source: 'contact.client1Cell', required: true },
-        { key: 'email', label: 'Email', type: 'email', source: 'contact.client1Email', required: true },
-      ]
-    },
-    {
-      title: 'Client 2 Legal Identity',
-      showIf: () => pqState.hasSpouse || pq.family?.client2FirstName,
-      fields: [
-        { key: 'c2LegalFirstName', label: 'Legal First Name', source: 'family.client2FirstName', required: true },
-        { key: 'c2MiddleInitial', label: 'Middle Initial' },
-        { key: 'c2LegalLastName', label: 'Legal Last Name', source: 'family.client2LastName', required: true },
-        { key: 'c2Dob', label: 'Date of Birth', type: 'date', source: 'family.client2DOB', required: true },
-        { key: 'c2Ssn', label: 'Social Security Number', masked: true, required: true },
-        { key: 'c2Citizenship', label: 'Citizenship', required: true },
-        { key: 'c2DlState', label: "Driver's License State", required: true },
-        { key: 'c2DlNumber', label: "Driver's License Number", masked: true, required: true },
-        { key: 'c2DlExpiration', label: 'DL Expiration', type: 'date', required: true },
-        { key: 'c2CellPhone', label: 'Cell Phone', source: 'contact.client2Cell', required: true },
-        { key: 'c2Email', label: 'Email', type: 'email', source: 'contact.client2Email', required: true },
-      ]
-    },
-    {
-      title: 'Contact & Residence',
-      fields: [
-        { key: 'address1', label: 'Address', source: 'contact.address1', required: true, width: 'wide' },
-        { key: 'address2', label: 'Address Line 2', source: 'contact.address2', width: 'wide' },
-        { key: 'city', label: 'City', source: 'contact.city', required: true, width: 'medium' },
-        { key: 'state', label: 'State', source: 'contact.state', required: true },
-        { key: 'zip', label: 'Zip', source: 'contact.zip', required: true },
-        { key: 'homePhone', label: 'Home Phone', source: 'contact.homePhone' },
-        { key: 'fax', label: 'Fax' },
-      ]
-    },
-    {
-      title: 'Employment — Client 1',
-      fields: [
-        { key: 'c1Employer', label: 'Employer', source: 'employment.client1.employer', required: true },
-        { key: 'c1EmployerAddress', label: 'Employer Address', width: 'wide' },
-        { key: 'c1EmployerCSZ', label: 'City / State / Zip', width: 'medium' },
-        { key: 'c1Title', label: 'Title / Position', source: 'employment.client1.jobTitle' },
-        { key: 'c1BusinessType', label: 'Type of Business', source: 'employment.client1.businessType' },
-        { key: 'c1WorkPhone', label: 'Work Phone' },
-        { key: 'c1Retired', label: 'Retired?', type: 'select', options: ['No', 'Yes'] },
-      ]
-    },
-    {
-      title: 'Employment — Client 2',
-      showIf: () => pqState.hasSpouse || pq.family?.client2FirstName,
-      fields: [
-        { key: 'c2Employer', label: 'Employer', source: 'employment.client2.employer' },
-        { key: 'c2EmployerAddress', label: 'Employer Address', width: 'wide' },
-        { key: 'c2EmployerCSZ', label: 'City / State / Zip', width: 'medium' },
-        { key: 'c2Title', label: 'Title / Position', source: 'employment.client2.jobTitle' },
-        { key: 'c2BusinessType', label: 'Type of Business', source: 'employment.client2.businessType' },
-        { key: 'c2WorkPhone', label: 'Work Phone' },
-        { key: 'c2Retired', label: 'Retired?', type: 'select', options: ['No', 'Yes'] },
-      ]
-    },
-    {
-      title: 'Children / Beneficiaries',
-      table: {
-        key: 'beneficiaries',
-        columns: [
-          { key: 'firstName', label: 'First Name' },
-          { key: 'lastName', label: 'Last Name' },
-          { key: 'relationship', label: 'Relationship' },
-          { key: 'dob', label: 'Date of Birth', type: 'date' },
-          { key: 'ssn', label: 'SSN' },
-          { key: 'childOf', label: 'Child of (Client 1/2)' },
-        ]
-      }
-    },
-  ];
-
-  sections.forEach(section => {
-    if (section.showIf && !section.showIf()) return;
-
-    const wrapper = el('section', { className: 'form-section' });
-    const hdr = el('div', { className: 'section-header' });
-    hdr.appendChild(el('h2', { textContent: section.title }));
-
-    // Completion meter
-    let fieldCount = 0, filledCount = 0;
-    if (section.fields) {
-      section.fields.forEach(f => {
-        if (f.required) {
-          fieldCount++;
-          const clientVal = getDeep(store.clientSheet, `${section.title}.${f.key}`);
-          const sourceVal = f.source ? getDeep(pq, f.source) : null;
-          if ((clientVal && String(clientVal).trim()) || (sourceVal && String(sourceVal).trim())) filledCount++;
-        }
-      });
-    }
-    if (fieldCount > 0) {
-      const meter = el('div', { className: 'completion-meter' });
-      const pct = Math.round(filledCount / fieldCount * 100);
-      const bar = el('div', { className: 'completion-bar' });
-      bar.appendChild(el('div', { className: 'completion-bar-fill', style: { width: pct + '%', background: pct === 100 ? '#198754' : pct > 50 ? '#d9a708' : '#dc3545' } }));
-      meter.append(bar, document.createTextNode(` ${pct}%`));
-      hdr.appendChild(meter);
-    }
-
-    wrapper.appendChild(hdr);
-    const content = el('div', { className: 'section-content' });
-
-    if (section.fields) {
-      const grid = el('div', { className: 'grid' });
-      section.fields.forEach(f => {
-        const fieldEl = buildFieldEl(f, 'clientSheet.' + section.title, 'client');
-        const inp = fieldEl.querySelector('[data-path]');
-
-        // Prefill from PQ
-        if (f.source) {
-          const srcVal = getDeep(pq, f.source);
-          if (srcVal) {
-            inp.value = srcVal;
-            fieldEl.classList.add('flag-yellow');
-            // Add source tag
-            const labelRow = fieldEl.querySelector('.label-row');
-            if (labelRow) labelRow.appendChild(el('span', { className: 'field-tag tag-source', textContent: 'From PQ' }));
-          }
-        }
-
-        // Override with client sheet saved data
-        const saved = getDeep(store.clientSheet, `${section.title}.${f.key}`);
-        if (saved != null && String(saved).trim() !== '') {
-          inp.value = saved;
-          fieldEl.classList.remove('flag-yellow');
-          fieldEl.classList.add('flag-green');
-        }
-
-        // Mark required but empty as red
-        if (f.required && (!inp.value || inp.value.trim() === '')) {
-          fieldEl.classList.add('flag-red');
-        }
-
-        // Select field setup
-        if (f.type === 'select' && f.options) {
-          // Already handled in buildFieldEl
-        }
-
-        grid.appendChild(fieldEl);
-      });
-      content.appendChild(grid);
-    }
-
-    if (section.table) {
-      const existingBene = getDeep(store.clientSheet, 'beneficiaries') || [
-        ...(pq.family?.children || []).map(c => ({ firstName: c.name, relationship: 'Child' })),
-        ...(pq.family?.grandchildren || []).map(c => ({ firstName: c.name, relationship: 'Grandchild' })),
-      ];
-      content.appendChild(buildTableEl('clientSheet', section.table, existingBene));
-    }
-
-    wrapper.appendChild(content);
-    host.appendChild(wrapper);
-  });
-
-  // Schwab Application Packet Readiness
-  renderSchwabReadiness(host, store, pq);
-
-  // Certification box
-  const certBox = el('div', { className: 'certification-box' });
-  const certLabel = el('label');
-  const certCB = el('input', { type: 'checkbox', id: 'schwab-cert-checkbox' });
-  certCB.addEventListener('change', () => {
-    document.getElementById('client-submit-btn').disabled = !certCB.checked;
-  });
-  certLabel.append(certCB, document.createTextNode('I have reviewed all client information and investment instructions for Schwab readiness. All required fields are complete and accurate.'));
-  certBox.appendChild(certLabel);
-  host.appendChild(certBox);
-}
-
-function renderSchwabReadiness(host, store, pq) {
-  const section = el('section', { className: 'form-section' });
-  const hdr = el('div', { className: 'section-header static-header' });
-  hdr.appendChild(el('h2', { textContent: 'Schwab Application Packet Readiness' }));
-  section.appendChild(hdr);
-
-  const content = el('div', { className: 'section-content' });
-  const grid = el('div', { className: 'readiness-grid' });
-
-  const checks = [
-    { label: 'Identity Complete', check: () => !!(pq.family?.client1FirstName && pq.family?.client1LastName && pq.family?.client1DOB) },
-    { label: 'Contact Complete', check: () => !!(pq.contact?.address1 && pq.contact?.city && pq.contact?.state && pq.contact?.zip) },
-    { label: 'Employment Complete', check: () => !!(pq.employment?.client1?.status) },
-    { label: 'Beneficiaries on File', check: () => !!(pq.family?.children?.length || getDeep(store, 'clientSheet.beneficiaries')?.length) },
-    { label: 'Account Opening Instructions', check: () => !!(getDeep(store, 'planOrder.accountsToEstablish.accounts')?.length) },
-    { label: 'Transfer Instructions', check: () => !!(getDeep(store, 'investmentActionPlan.actionRows')) },
-    { label: 'Statements Collected', check: () => { const warnings = collectIAPWarnings(); return !warnings.some(w => w.message.includes('Statement')); } },
-    { label: 'No Unresolved TBDs', check: () => { const warnings = collectIAPWarnings(); return !warnings.some(w => w.message.includes('TBD')); } },
-  ];
-
-  const blockers = [];
-  checks.forEach(c => {
-    const pass = c.check();
-    const item = el('div', { className: 'readiness-item' });
-    item.appendChild(el('div', { className: `readiness-icon ${pass ? 'pass' : 'fail'}`, textContent: pass ? '\u2713' : '\u2717' }));
-    const info = el('div');
-    info.appendChild(el('div', { className: 'readiness-label', textContent: c.label }));
-    info.appendChild(el('div', { className: 'readiness-detail', textContent: pass ? 'Complete' : 'Incomplete — required' }));
-    item.appendChild(info);
-    grid.appendChild(item);
-    if (!pass) blockers.push(c.label);
-  });
-
-  content.appendChild(grid);
-
-  if (blockers.length) {
-    content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Blockers', style: { marginTop: '14px', color: '#dc3545' } }));
-    const list = el('ul', { className: 'blocker-list' });
-    blockers.forEach(b => {
-      const li = el('li');
-      li.appendChild(el('span', { className: 'blocker-icon', textContent: '\u26d4' }));
-      li.appendChild(el('span', { textContent: `${b} is incomplete. This must be resolved before Schwab submission.` }));
-      list.appendChild(li);
-    });
-    content.appendChild(list);
-  }
-
-  section.appendChild(content);
-  host.appendChild(section);
-}
-
-/* ==========================================================================
-   PIPELINE / NAVIGATION
-   ========================================================================== */
-
-function setActiveScreen(id) {
-  currentScreen = id;
-  STAGES.forEach(s => {
-    const node = document.getElementById(`screen-${s}`);
-    if (!node) return;
-    const show = s === id;
-    node.classList.toggle('is-active', show);
-    node.setAttribute('aria-hidden', String(!show));
-  });
-  updatePipeline();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function setPipelineStage(id, stateClass, statusText, metaText, disabled) {
-  const stage = document.getElementById(`step-btn-${id}`);
-  const status = document.getElementById(`stage-status-${id}`);
-  const meta = document.getElementById(`stage-meta-${id}`);
-  if (!stage) return;
-  stage.classList.remove('is-current', 'is-complete', 'is-ready', 'is-locked');
-  stage.classList.add(stateClass);
-  stage.disabled = Boolean(disabled);
-  if (status) status.textContent = statusText;
-  if (meta) meta.textContent = metaText;
-}
-
-function fmtTs(ts) {
-  if (!ts) return 'Not started';
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return 'Not started';
-  return d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
-
-function updatePipeline() {
-  const store = getStore();
-  const w = store.workflow || {};
-
-  const pqCurrent = currentScreen === 'pq' || currentScreen === 'pq-review';
-  setPipelineStage('pq',
-    pqCurrent ? 'is-current' : (w.pqSubmittedAt ? 'is-complete' : 'is-ready'),
-    w.pqSubmittedAt ? 'Complete' : 'Open',
-    w.pqSubmittedAt ? `Submitted ${fmtTs(w.pqSubmittedAt)}` : 'Not submitted',
-    false
-  );
-
-  setPipelineStage('plan',
-    !w.pqSubmittedAt ? 'is-locked' : (currentScreen === 'plan' ? 'is-current' : (w.planSubmittedAt ? 'is-complete' : 'is-ready')),
-    !w.pqSubmittedAt ? 'Waiting on PQ' : (w.planSubmittedAt ? 'Complete' : 'Open'),
-    w.planSubmittedAt ? `Submitted ${fmtTs(w.planSubmittedAt)}` : 'Not started',
-    !w.pqSubmittedAt
-  );
-
-  setPipelineStage('iap',
-    !w.planSubmittedAt ? 'is-locked' : (currentScreen === 'iap' ? 'is-current' : (w.iapValidatedAt ? 'is-complete' : 'is-ready')),
-    !w.planSubmittedAt ? 'Waiting on Plan' : (w.iapValidatedAt ? 'Validated' : 'Open'),
-    w.iapValidatedAt ? `Validated ${fmtTs(w.iapValidatedAt)}` : 'Not started',
-    !w.planSubmittedAt
-  );
-
-  setPipelineStage('client',
-    !w.iapValidatedAt ? 'is-locked' : (currentScreen === 'client' ? 'is-current' : (w.clientCertifiedAt ? 'is-complete' : 'is-ready')),
-    !w.iapValidatedAt ? 'Waiting on IAP' : (w.clientCertifiedAt ? 'Certified' : 'Open'),
-    w.clientCertifiedAt ? `Certified ${fmtTs(w.clientCertifiedAt)}` : 'Not started',
-    !w.iapValidatedAt
-  );
-}
 
 /* ==========================================================================
    EVENT BINDING
@@ -3153,11 +2330,21 @@ function bindEvents() {
     const store = getStore();
     store.pqTemplate = data;
     store.workflow = store.workflow || {};
-    store.workflow.pqSubmittedAt = new Date().toISOString();
+    store.workflow.pqSavedAt = new Date().toISOString();
     saveStore(store);
-    _pqDraft = {}; // Clear draft after successful submit
-    renderPQReview();
-    setActiveScreen('pq-review');
+    _pqDraft = {}; // Clear draft after successful save
+
+    // Notify parent Lightning component (when running inside Salesforce)
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'PQ_SAVE', payload: data }, '*');
+    }
+
+    // Visual confirmation
+    const btn = document.getElementById('pq-save-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Saved \u2713';
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
   });
 
   document.getElementById('pq-reset-btn').addEventListener('click', () => {
@@ -3174,91 +2361,6 @@ function bindEvents() {
     pqState.employmentClient2 = 'Employed';
     _pqDraft = {}; // Clear draft on reset
     renderPQ();
-  });
-
-  // PQ Review
-  document.getElementById('back-to-pq-edit-btn').addEventListener('click', () => setActiveScreen('pq'));
-  document.getElementById('continue-to-plan-btn').addEventListener('click', () => {
-    const store = getStore();
-    if (!store.workflow?.pqSubmittedAt) { alert('Submit PQ first.'); return; }
-    renderPlan();
-    setActiveScreen('plan');
-  });
-
-  // Plan form
-  const planForm = document.getElementById('plan-form');
-  planForm.addEventListener('input', onPlanInput);
-  planForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const store = getStore();
-    store.planOrder = collectForm(planForm);
-    store.workflow = store.workflow || {};
-    store.workflow.planSubmittedAt = new Date().toISOString();
-    saveStore(store);
-    renderIAP();
-    setActiveScreen('iap');
-  });
-
-  document.getElementById('back-to-pq-review-btn').addEventListener('click', () => {
-    renderPQReview();
-    setActiveScreen('pq-review');
-  });
-
-  // IAP
-  document.getElementById('back-to-plan-btn2').addEventListener('click', () => {
-    renderPlan();
-    setActiveScreen('plan');
-  });
-  document.getElementById('iap-submit-btn').addEventListener('click', () => {
-    const store = getStore();
-    const iapHost = document.getElementById('iap-content');
-    store.investmentActionPlan = collectForm(iapHost);
-    store.workflow = store.workflow || {};
-    store.workflow.iapValidatedAt = new Date().toISOString();
-    saveStore(store);
-    renderClientSheet();
-    setActiveScreen('client');
-  });
-
-  // Client Sheet
-  document.getElementById('back-to-iap-btn').addEventListener('click', () => {
-    renderIAP();
-    setActiveScreen('iap');
-  });
-  document.getElementById('client-submit-btn').addEventListener('click', () => {
-    const store = getStore();
-    const clientHost = document.getElementById('client-content');
-    store.clientSheet = collectForm(clientHost);
-    store.workflow = store.workflow || {};
-    store.workflow.clientCertifiedAt = new Date().toISOString();
-    saveStore(store);
-    alert('Schwab readiness certified! Client info sheet is complete.');
-    updatePipeline();
-  });
-
-  // Pipeline navigation
-  document.getElementById('step-btn-pq').addEventListener('click', () => {
-    const store = getStore();
-    if (store.workflow?.pqSubmittedAt) { renderPQReview(); setActiveScreen('pq-review'); }
-    else setActiveScreen('pq');
-  });
-  document.getElementById('step-btn-plan').addEventListener('click', () => {
-    const store = getStore();
-    if (!store.workflow?.pqSubmittedAt) { alert('Submit PQ to unlock Plan Design.'); return; }
-    renderPlan();
-    setActiveScreen('plan');
-  });
-  document.getElementById('step-btn-iap').addEventListener('click', () => {
-    const store = getStore();
-    if (!store.workflow?.planSubmittedAt) { alert('Submit Plan to unlock IAP.'); return; }
-    renderIAP();
-    setActiveScreen('iap');
-  });
-  document.getElementById('step-btn-client').addEventListener('click', () => {
-    const store = getStore();
-    if (!store.workflow?.iapValidatedAt) { alert('Validate IAP to unlock Client Info Sheet.'); return; }
-    renderClientSheet();
-    setActiveScreen('client');
   });
 
   // Data console
@@ -3290,14 +2392,6 @@ function init() {
   renderPQ();
   bindEvents();
   refreshConsole();
-
-  // Restore screen based on workflow state
-  const store = getStore();
-  if (store.workflow?.clientCertifiedAt) { renderClientSheet(); setActiveScreen('client'); }
-  else if (store.workflow?.iapValidatedAt) { renderIAP(); setActiveScreen('iap'); }
-  else if (store.workflow?.planSubmittedAt) { renderPlan(); setActiveScreen('plan'); }
-  else if (store.workflow?.pqSubmittedAt) { renderPQReview(); setActiveScreen('pq-review'); }
-  else setActiveScreen('pq');
 }
 
 init();

@@ -1,3 +1,20 @@
+/* ===== SELF-HOSTED FONTS (Lightning CSP compatible) ===== */
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('./fonts/SpaceGrotesk-Latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Sans 3';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/SourceSans3-Latin.woff2') format('woff2');
+}
+
 /* ===== DESIGN TOKENS ===== */
 :root {
   --panel: #ffffff;

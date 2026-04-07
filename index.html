@@ -3,10 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pure Financial Advisors — Client Intake Workflow</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>Pure Financial Advisors — PQ Discovery Intake</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
@@ -15,49 +12,17 @@
       <div class="brand">Pure Financial Advisors</div>
       <div class="topbar-actions">
         <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
-        <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Demo</button>
+        <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Data</button>
         <div class="user-pill">John Smith <span>| Advisor</span></div>
       </div>
     </header>
 
     <main class="content">
-      <!-- 4-Stage Pipeline -->
-      <section class="pipeline" aria-label="Client onboarding pipeline">
-        <button id="step-btn-pq" type="button" class="pipeline-stage is-current" data-stage="pq">
-          <span class="pipeline-kicker">Stage 1</span>
-          <span class="pipeline-title">Discovery Intake</span>
-          <span class="pipeline-subtitle">PQ Template</span>
-          <span class="pipeline-status" id="stage-status-pq">In Progress</span>
-          <span class="pipeline-meta" id="stage-meta-pq">Intake not submitted</span>
-        </button>
-        <button id="step-btn-plan" type="button" class="pipeline-stage is-locked" data-stage="plan">
-          <span class="pipeline-kicker">Stage 2</span>
-          <span class="pipeline-title">Plan Design</span>
-          <span class="pipeline-subtitle">Plan Order Form</span>
-          <span class="pipeline-status" id="stage-status-plan">Waiting on PQ</span>
-          <span class="pipeline-meta" id="stage-meta-plan">Not started</span>
-        </button>
-        <button id="step-btn-iap" type="button" class="pipeline-stage is-locked" data-stage="iap">
-          <span class="pipeline-kicker">Stage 3</span>
-          <span class="pipeline-title">Action Plan</span>
-          <span class="pipeline-subtitle">Investment Action Plan</span>
-          <span class="pipeline-status" id="stage-status-iap">Waiting on Plan</span>
-          <span class="pipeline-meta" id="stage-meta-iap">Not started</span>
-        </button>
-        <button id="step-btn-client" type="button" class="pipeline-stage is-locked" data-stage="client">
-          <span class="pipeline-kicker">Stage 4</span>
-          <span class="pipeline-title">Schwab Readiness</span>
-          <span class="pipeline-subtitle">Client Info Sheet</span>
-          <span class="pipeline-status" id="stage-status-client">Waiting on IAP</span>
-          <span class="pipeline-meta" id="stage-meta-client">Not started</span>
-        </button>
-      </section>
-
-      <!-- ========== STAGE 1: PQ DISCOVERY INTAKE ========== -->
+      <!-- ========== PQ DISCOVERY INTAKE ========== -->
       <section id="screen-pq" class="screen is-active">
         <section class="page-title">
           <h1>PQ Discovery Intake</h1>
-          <p>Stage 1: Capture discovery information and known facts</p>
+          <p>Capture discovery information and known facts</p>
         </section>
         <form id="pq-form" autocomplete="off">
           <div class="pq-layout">
@@ -66,79 +31,10 @@
             <aside id="pq-dashboard" class="pq-dashboard"></aside>
           </div>
           <footer class="actions">
-            <button type="button" id="pq-reset-btn" class="btn btn-light">Clear PQ Form</button>
-            <button type="submit" id="pq-submit-btn" class="btn btn-primary">Submit Discovery Intake</button>
+            <button type="button" id="pq-reset-btn" class="btn btn-light">Clear Form</button>
+            <button type="submit" id="pq-save-btn" class="btn btn-primary">Save</button>
           </footer>
         </form>
-      </section>
-
-      <!-- ========== PQ REVIEW ========== -->
-      <section id="screen-pq-review" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>PQ Review</h1>
-          <p>Review collected data before advancing to planning</p>
-        </section>
-        <div id="pq-review-content"></div>
-        <footer class="actions">
-          <button type="button" id="back-to-pq-edit-btn" class="btn btn-light">Back to PQ</button>
-          <button type="button" id="continue-to-plan-btn" class="btn btn-primary">Start Plan Design</button>
-        </footer>
-      </section>
-
-      <!-- ========== STAGE 2: PLAN DESIGN ========== -->
-      <section id="screen-plan" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>Plan Design &amp; Recommendations</h1>
-          <p>Stage 2: Confirm PQ facts and collect recommendation-level data</p>
-        </section>
-        <section class="legend-bar" aria-live="polite">
-          <span class="legend-pill legend-yellow">Prefilled from PQ — confirm or change</span>
-          <span class="legend-pill legend-red">Missing — needs entry</span>
-          <span class="legend-pill legend-green">Confirmed / completed</span>
-        </section>
-        <form id="plan-form" autocomplete="off">
-          <div id="plan-form-sections"></div>
-          <footer class="actions">
-            <button type="button" id="back-to-pq-review-btn" class="btn btn-light">Back to PQ Review</button>
-            <button type="submit" id="plan-submit-btn" class="btn btn-primary">Submit Plan Order</button>
-          </footer>
-        </form>
-      </section>
-
-      <!-- ========== STAGE 3: INVESTMENT ACTION PLAN ========== -->
-      <section id="screen-iap" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>Investment Action Plan</h1>
-          <p>Stage 3: Validate investment instructions and transfer actions</p>
-        </section>
-        <section class="legend-bar">
-          <span class="legend-pill legend-green">Validated</span>
-          <span class="legend-pill legend-yellow">Needs review</span>
-          <span class="legend-pill legend-red">Blocker / missing</span>
-        </section>
-        <div id="iap-content"></div>
-        <footer class="actions">
-          <button type="button" id="back-to-plan-btn2" class="btn btn-light">Back to Plan</button>
-          <button type="button" id="iap-submit-btn" class="btn btn-primary">Validate &amp; Advance</button>
-        </footer>
-      </section>
-
-      <!-- ========== STAGE 4: CLIENT INFO SHEET / SCHWAB READINESS ========== -->
-      <section id="screen-client" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>Client Info Sheet / Schwab Readiness</h1>
-          <p>Stage 4: Final application-readiness review</p>
-        </section>
-        <section class="legend-bar">
-          <span class="legend-pill legend-green">Complete</span>
-          <span class="legend-pill legend-yellow">Prefilled — needs verification</span>
-          <span class="legend-pill legend-red">Required for Schwab</span>
-        </section>
-        <div id="client-content"></div>
-        <footer class="actions">
-          <button type="button" id="back-to-iap-btn" class="btn btn-light">Back to IAP</button>
-          <button type="button" id="client-submit-btn" class="btn btn-primary" disabled>Certify Schwab Readiness</button>
-        </footer>
       </section>
     </main>
   </div>
