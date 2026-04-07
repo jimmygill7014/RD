@@ -1003,6 +1003,37 @@ function syncEmploymentFields() {
   });
 }
 
+function refreshOwnerDataLists() {
+  const form = document.getElementById('pq-form');
+  if (!form) return;
+  // Build current owner options from live field values
+  const c1 = [
+    (form.querySelector('[data-path="family.client1FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client1LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const c2 = [
+    (form.querySelector('[data-path="family.client2FirstName"]')?.value || '').trim(),
+    (form.querySelector('[data-path="family.client2LastName"]')?.value || '').trim()
+  ].filter(Boolean).join(' ');
+  const opts = [];
+  if (c1) opts.push(c1);
+  if ((pqState.hasSpouse || c2) && c2) opts.push(c2);
+  if (c1 && c2) opts.push('Joint');
+  opts.push('Trust');
+
+  // Refresh every datalist whose id contains owner, ownership, or insured
+  document.querySelectorAll('datalist').forEach(dl => {
+    if (/owner|ownership|insured/i.test(dl.id)) {
+      clearChildren(dl);
+      opts.forEach(o => {
+        const opt = document.createElement('option');
+        opt.value = o;
+        dl.appendChild(opt);
+      });
+    }
+  });
+}
+
 function setupEmploymentNameSync() {
   const form = document.getElementById('pq-form');
   if (!form) return;
@@ -1015,6 +1046,7 @@ function setupEmploymentNameSync() {
     const inp = form.querySelector(`[data-path="${path}"]`);
     if (inp) {
       inp.addEventListener('input', syncEmploymentFields);
+      inp.addEventListener('input', refreshOwnerDataLists);
     }
   });
 }
