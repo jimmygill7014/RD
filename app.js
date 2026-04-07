@@ -1686,7 +1686,6 @@ function renderIncomeSection(section, pqData) {
   const ownerOptions = getOwnerNameOptions(pqData);
 
   // ── 1. Employment Income ──
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Employment Income' }));
   const family = pqData?.family || {};
   const c1Name = [(family.client1FirstName || '').trim(), (family.client1LastName || '').trim()].filter(Boolean).join(' ');
   const c2Name = [(family.client2FirstName || '').trim(), (family.client2LastName || '').trim()].filter(Boolean).join(' ');
@@ -1733,7 +1732,6 @@ function renderIncomeSection(section, pqData) {
   }, mergedEmp));
 
   // ── 2. Social Security ──
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Social Security', style: { marginTop: '18px' } }));
   const existingSS = getDeep(pqData, 'income.socialSecurity');
   content.appendChild(buildTableEl('income', {
     key: 'socialSecurity',
@@ -1749,7 +1747,6 @@ function renderIncomeSection(section, pqData) {
   }, existingSS));
 
   // ── 3. Pension ──
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Pension', style: { marginTop: '18px' } }));
   const existingPension = getDeep(pqData, 'income.pension');
   content.appendChild(buildTableEl('income', {
     key: 'pension',
@@ -1765,8 +1762,6 @@ function renderIncomeSection(section, pqData) {
   }, existingPension));
 
   // ── 4. Other Income ──
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Other Income', style: { marginTop: '18px' } }));
-
   // Auto-source from assets with Income (EBT)
   const autoOther = [];
   const reData = getDeep(pqData, 'assets.realEstate') || [];
