@@ -158,6 +158,17 @@ function calcAge(dob) {
   return age;
 }
 
+function calcAgeAtDate(dob, targetDate) {
+  if (!dob || !targetDate) return '';
+  const d = new Date(dob);
+  const t = new Date(targetDate);
+  if (isNaN(d.getTime()) || isNaN(t.getTime())) return '';
+  let age = t.getFullYear() - d.getFullYear();
+  const m = t.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age--;
+  return age;
+}
+
 function getOwnerNameOptions(pqData) {
   const opts = [];
   const family = pqData?.family || {};
@@ -213,8 +224,8 @@ const pqSections = [
     id: 'family',
     title: 'Household / Family',
     fields: [
-      { key: 'client1FirstName', label: 'First Name', width: 'medium', required: true },
-      { key: 'client1LastName', label: 'Last Name', width: 'medium', required: true },
+      { key: 'client1FirstName', label: 'Client First Name', width: 'medium', required: true },
+      { key: 'client1LastName', label: 'Client Last Name', width: 'medium', required: true },
       { key: 'client1Nickname', label: 'Nickname', width: 'medium' },
       { key: 'client1DOB', label: 'Date of Birth', type: 'date', width: 'medium', required: true },
       { key: 'client1Age', label: 'Age', type: 'number', width: 'field-2' },
@@ -544,6 +555,14 @@ function buildTableEl(sectionId, tableDef, existingData) {
       if (inp.dataset.currencyType === 'currency') attachCurrencyBehavior(inp);
       if (col.hidden) td.style.display = 'none';
 
+      // Mark field read-only if listed in seed._readOnly
+      const roKeys = seed._readOnly;
+      if (Array.isArray(roKeys) && roKeys.includes(col.key) && !col.hidden) {
+        inp.readOnly = true;
+        inp.tabIndex = -1;
+        inp.classList.add('field-readonly');
+      }
+
       // Wrap with prefix/suffix symbol if needed
       if (!col.hidden && (col.type === 'currency' || col.type === 'percent')) {
         const wrap = el('div', { className: 'input-symbol-wrap' });
@@ -557,10 +576,16 @@ function buildTableEl(sectionId, tableDef, existingData) {
       tr.appendChild(td);
     });
     const actTd = el('td', { className: 'row-actions' });
-    actTd.appendChild(el('button', {
-      type: 'button', className: 'btn-icon', textContent: '\u00d7',
-      onClick: () => { tr.remove(); reindex(); recalcPQComputed(); }
-    }));
+    const hasReadOnly = Array.isArray(seed._readOnly) && seed._readOnly.length > 0;
+    if (hasReadOnly) {
+      // Auto-sourced row — hide the delete button
+      actTd.style.visibility = 'hidden';
+    } else {
+      actTd.appendChild(el('button', {
+        type: 'button', className: 'btn-icon', textContent: '\u00d7',
+        onClick: () => { tr.remove(); reindex(); recalcPQComputed(); }
+      }));
+    }
     tr.appendChild(actTd);
     tbody.appendChild(tr);
   }
@@ -587,7 +612,11 @@ function buildTableEl(sectionId, tableDef, existingData) {
   }
 
   function rowHasAnyData(tr) {
-    return editableCells(tr).some(node => String(node.value || '').trim() !== '');
+    // Check all visible inputs (including read-only) for any data
+    return Array.from(tr.querySelectorAll('input, select, textarea')).some(node => {
+      if (!node || (node.tagName === 'INPUT' && node.type === 'hidden')) return false;
+      return String(node.value || '').trim() !== '';
+    });
   }
 
   // Expose addRow/reindex so external sync logic can add/update rows
@@ -692,7 +721,7 @@ const pqState = {
   hasSpouse: false,
   hasChildren: false,
   assetChecks: {
-    ownHome: false, secondaryHome: false, additionalRE: false, ownBusiness: false,
+    ownHome: false, secondaryHome: false, additionalRE: false,
     taxDeferred: false, roth: false, taxable: false, cashCd: false, plan529: false, hsa: false,
   },
   employmentClient1: 'Employed',
@@ -777,10 +806,18 @@ function syncREToLiabilities() {
           setRowVal(emptyRow, 'payment', payment);
           setRowVal(emptyRow, 'interestRate', intRate);
           setRowVal(emptyRow, 'term', term);
+          // Mark synced fields read-only
+          ['description', 'payment', 'amount', 'interestRate', 'term'].forEach(k => {
+            const inp = emptyRow.querySelector(`[data-path$=".${k}"]`);
+            if (inp) { inp.readOnly = true; inp.tabIndex = -1; inp.classList.add('field-readonly'); }
+          });
+          // Hide delete button
+          const actTd = emptyRow.querySelector('.row-actions');
+          if (actTd) actTd.style.visibility = 'hidden';
           liabTr = emptyRow;
         } else {
           // No empty row available — add a new one
-          liabBody._addRow({ _reKey: autoKey, description: liabDesc, amount: loan, payment, interestRate: intRate, term });
+          liabBody._addRow({ _reKey: autoKey, description: liabDesc, amount: loan, payment, interestRate: intRate, term, _readOnly: ['description', 'payment', 'amount', 'interestRate', 'term'] });
           liabBody._reindex();
           const newRows = Array.from(liabBody.querySelectorAll('tr'));
           liabTr = newRows.find(tr => rowVal(tr, '_reKey') === autoKey);
@@ -842,7 +879,7 @@ function syncToExpenses() {
       const desc = rowVal(tr, 'description');
       const payment = parseCommas(rowVal(tr, 'payment')) || 0;
       if (payment > 0) {
-        expected.push({ _source: 'liability', _syncKey: 'liab_' + i, description: desc || 'Loan Payment', amount: payment * 12, notes: 'From liabilities' });
+        expected.push({ _source: 'liability', _syncKey: 'liab_' + i, description: desc || 'Loan Payment', amount: payment * 12, notes: 'From liabilities', _readOnly: ['description', 'amount', 'notes'] });
       }
     });
   }
@@ -853,7 +890,7 @@ function syncToExpenses() {
       const company = rowVal(tr, 'company');
       const premium = parseCommas(rowVal(tr, 'annualPremium')) || 0;
       if (premium > 0) {
-        expected.push({ _source: 'insurance', _syncKey: 'ins_' + i, description: 'Insurance Premium - ' + (company || 'Unknown'), amount: premium, notes: 'From insurance' });
+        expected.push({ _source: 'insurance', _syncKey: 'ins_' + i, description: 'Insurance Premium - ' + (company || 'Unknown'), amount: premium, notes: 'From insurance', _readOnly: ['description', 'amount', 'notes'] });
       }
     });
   }
@@ -922,7 +959,7 @@ function syncAssetToOtherIncome() {
       const ebt = parseCommas(rowVal(tr, 'incomeEBT')) || 0;
       const ownership = rowVal(tr, 'ownership');
       if (ebt > 0) {
-        expected.push({ _source: 'asset', owner: ownership, description: desc || 'Asset Income', annualAmount: ebt, notes: 'From assets' });
+        expected.push({ _source: 'asset', owner: ownership, description: desc || 'Asset Income', annualAmount: ebt * 12, notes: 'From assets', _readOnly: ['owner', 'description', 'annualAmount', 'notes'] });
       }
     });
   }
@@ -950,7 +987,19 @@ function syncAssetToOtherIncome() {
 
     if (blankRow) {
       // Fill the blank row
-      Object.entries(exp).forEach(([k, v]) => setRowVal(blankRow, k, String(v)));
+      Object.entries(exp).forEach(([k, v]) => {
+        if (k === '_readOnly') return;
+        setRowVal(blankRow, k, String(v));
+      });
+      // Mark synced fields read-only
+      if (Array.isArray(exp._readOnly)) {
+        exp._readOnly.forEach(k => {
+          const inp = blankRow.querySelector(`[data-path$=".${k}"]`);
+          if (inp) { inp.readOnly = true; inp.tabIndex = -1; inp.classList.add('field-readonly'); }
+        });
+        const actTd = blankRow.querySelector('.row-actions');
+        if (actTd) actTd.style.visibility = 'hidden';
+      }
     } else {
       otherBody._addRow(exp);
     }
@@ -987,18 +1036,23 @@ function syncEmploymentFields() {
   ].filter(Boolean).join(' ');
   const c1Employer = (form.querySelector('[data-path="employment.client1.employer"]')?.value || '').trim();
   const c2Employer = (form.querySelector('[data-path="employment.client2.employer"]')?.value || '').trim();
+  const c1RetDate = form.querySelector('[data-path="employment.client1.retirementDate"]')?.value || '';
+  const c2RetDate = form.querySelector('[data-path="employment.client2.retirementDate"]')?.value || '';
 
   empBody.querySelectorAll('tr').forEach(row => {
     const srcInp = row.querySelector('input[data-path$="._source"]');
     const ownerInp = row.querySelector('input[data-path$=".owner"]');
     const descInp = row.querySelector('input[data-path$=".description"]');
+    const retDateInp = row.querySelector('input[data-path$=".retirementDate"]');
     if (!srcInp || !ownerInp) return;
     if (srcInp.value === 'client1') {
       ownerInp.value = c1Name;
       if (descInp) descInp.value = c1Employer;
+      if (retDateInp) retDateInp.value = c1RetDate;
     } else if (srcInp.value === 'client2') {
       ownerInp.value = c2Name;
       if (descInp) descInp.value = c2Employer;
+      if (retDateInp) retDateInp.value = c2RetDate;
     }
   });
 }
@@ -1023,7 +1077,7 @@ function refreshOwnerDataLists() {
 
   // Refresh every datalist whose id contains owner, ownership, or insured
   document.querySelectorAll('datalist').forEach(dl => {
-    if (/owner|ownership|insured/i.test(dl.id)) {
+    if (/owner|ownership|insured|beneficiary/i.test(dl.id)) {
       clearChildren(dl);
       opts.forEach(o => {
         const opt = document.createElement('option');
@@ -1040,12 +1094,14 @@ function setupEmploymentNameSync() {
   const watchPaths = [
     'family.client1FirstName', 'family.client1LastName',
     'family.client2FirstName', 'family.client2LastName',
-    'employment.client1.employer', 'employment.client2.employer'
+    'employment.client1.employer', 'employment.client2.employer',
+    'employment.client1.retirementDate', 'employment.client2.retirementDate'
   ];
   watchPaths.forEach(path => {
     const inp = form.querySelector(`[data-path="${path}"]`);
     if (inp) {
       inp.addEventListener('input', syncEmploymentFields);
+      inp.addEventListener('change', syncEmploymentFields);
       inp.addEventListener('input', refreshOwnerDataLists);
     }
   });
@@ -1253,7 +1309,7 @@ function buildPQSection(section, pqData) {
         ? {
             ...t,
             columns: (t.columns || []).map(col => (
-              col.key === 'owner' || col.key === 'insured'
+              col.key === 'owner' || col.key === 'insured' || col.key === 'beneficiary'
                 ? { ...col, type: 'datalist', options: ownerOptions }
                 : col
             )),
@@ -1339,6 +1395,7 @@ function renderEmploymentSection(section, pqData) {
     grid1.appendChild(buildFieldEl({ key: 'client1.employer', label: 'Employer', width: 'medium' }, 'employment', 'pq'));
     grid1.appendChild(buildFieldEl({ key: 'client1.years', label: '# of Years', type: 'number', width: 'field' }, 'employment', 'pq'));
     grid1.appendChild(buildFieldEl({ key: 'client1.retirementDate', label: 'Retirement Date', type: 'date', width: 'medium' }, 'employment', 'pq'));
+    grid1.appendChild(buildFieldEl({ key: 'client1.retirementAge', label: 'Retirement Age', type: 'number', width: 'field' }, 'employment', 'pq'));
     grid1.appendChild(buildFieldEl({ key: 'client1.businessType', label: 'Type of Business', width: 'medium' }, 'employment', 'pq'));
   } else {
     grid1.appendChild(buildFieldEl({ key: 'client1.lastJob', label: 'Last Job Title', width: 'medium' }, 'employment', 'pq'));
@@ -1373,6 +1430,7 @@ function renderEmploymentSection(section, pqData) {
       grid2.appendChild(buildFieldEl({ key: 'client2.employer', label: 'Employer', width: 'medium' }, 'employment', 'pq'));
       grid2.appendChild(buildFieldEl({ key: 'client2.years', label: '# of Years', type: 'number', width: 'field' }, 'employment', 'pq'));
       grid2.appendChild(buildFieldEl({ key: 'client2.retirementDate', label: 'Retirement Date', type: 'date', width: 'medium' }, 'employment', 'pq'));
+      grid2.appendChild(buildFieldEl({ key: 'client2.retirementAge', label: 'Retirement Age', type: 'number', width: 'field' }, 'employment', 'pq'));
       grid2.appendChild(buildFieldEl({ key: 'client2.businessType', label: 'Type of Business', width: 'medium' }, 'employment', 'pq'));
     } else {
       grid2.appendChild(buildFieldEl({ key: 'client2.lastJob', label: 'Last Job Title', width: 'medium' }, 'employment', 'pq'));
@@ -1389,14 +1447,13 @@ function renderEmploymentSection(section, pqData) {
 function renderAssetsSection(section, pqData) {
   const { wrapper, content } = buildCollapsibleShell(section.id, section.title);
 
-  // --- Real Estate / Business subsection ---
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Real Estate / Business' }));
+  // --- Real Estate subsection ---
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Real Estate' }));
   const reChecks = el('div', { className: 'checkbox-group' });
   const reCheckDefs = [
     { key: 'ownHome', label: 'Own your home?' },
     { key: 'secondaryHome', label: 'Secondary home(s)?' },
     { key: 'additionalRE', label: 'Additional real estate?' },
-    { key: 'ownBusiness', label: 'Own a business?' },
   ];
   reCheckDefs.forEach(def => {
     const item = el('label', { className: 'checkbox-item' });
@@ -1422,7 +1479,6 @@ function renderAssetsSection(section, pqData) {
     { key: 'ownHome',       desc: 'Primary Residence' },
     { key: 'secondaryHome', desc: 'Secondary Residence', legacyDescs: ['Secondary Home'] },
     { key: 'additionalRE',  desc: 'Additional Real Estate' },
-    { key: 'ownBusiness',   desc: 'Business' },
   ];
 
   const ownershipOptions = getOwnerNameOptions(pqData);
@@ -1517,12 +1573,25 @@ function renderAssetsSection(section, pqData) {
   if (anyREChecked || mergedRows.length) {
     const reTable = {
       key: 'realEstate',
-      title: 'Real Estate & Business Assets',
+      title: 'Real Estate',
       columns: reColumns,
       starterRows: [],
     };
     content.appendChild(buildTableEl('assets', reTable, mergedRows.length ? mergedRows : null));
   }
+
+  // --- Business and Other subsection ---
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Business and Other', style: { marginTop: '18px' } }));
+  content.appendChild(buildTableEl('assets', {
+    key: 'businessOther',
+    title: '',
+    columns: [
+      { key: 'description', label: 'Description' },
+      { key: 'marketValue', label: 'Market Value', type: 'currency' },
+      { key: 'costBasis', label: 'Cost Basis', type: 'currency' },
+      { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
+    ]
+  }, getDeep(pqData, 'assets.businessOther')));
 
   // --- Investment Accounts subsection ---
   content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Investment Accounts', style: { marginTop: '18px' } }));
@@ -1565,7 +1634,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'companyMatch', label: 'Company Match', type: 'currency' },
         { key: 'type', label: 'Type' },
         { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
-        { key: 'beneficiary', label: 'Beneficiary' },
+        { key: 'beneficiary', label: 'Beneficiary', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.taxDeferred')));
   }
@@ -1581,7 +1650,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'companyMatch', label: 'Company Match', type: 'currency' },
         { key: 'type', label: 'Type' },
         { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
-        { key: 'beneficiary', label: 'Beneficiary' },
+        { key: 'beneficiary', label: 'Beneficiary', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.roth')));
   }
@@ -1598,7 +1667,7 @@ function renderAssetsSection(section, pqData) {
         { key: 'ownership', label: 'Ownership', type: 'datalist', options: ownershipOptions },
         { key: 'variableFixed', label: 'Variable / Fixed' },
         { key: 'issueDate', label: 'Issue Date', type: 'date' },
-        { key: 'beneficiary', label: 'Beneficiary' },
+        { key: 'beneficiary', label: 'Beneficiary', type: 'datalist', options: ownershipOptions },
       ]
     }, getDeep(pqData, 'assets.taxable')));
   }
@@ -1663,6 +1732,7 @@ function renderLiabilitiesSection(section, pqData) {
         amount: r.remainingLoan,
         interestRate: r.interestRate || '',
         term: r.term || '',
+        _readOnly: ['description', 'payment', 'amount', 'interestRate', 'term'],
       });
     }
   });
@@ -1686,6 +1756,10 @@ function renderLiabilitiesSection(section, pqData) {
       } else {
         merged.push(sr);
       }
+    });
+    // Tag RE-keyed rows as read-only
+    merged.forEach(r => {
+      if (r._reKey) r._readOnly = ['description', 'payment', 'amount', 'interestRate', 'term'];
     });
     // Remove RE-keyed rows whose RE source no longer has a loan
     const activeReKeys = new Set(starterRows.map(r => r._reKey).filter(Boolean));
@@ -1724,11 +1798,13 @@ function renderIncomeSection(section, pqData) {
 
   // Auto-sourced employment rows
   const autoEmp = [];
+  const c1RetDate = pqData?.employment?.client1?.retirementDate || '';
+  const c2RetDate = pqData?.employment?.client2?.retirementDate || '';
   if (pqState.employmentClient1 === 'Employed') {
-    autoEmp.push({ _source: 'client1', owner: c1Name, description: pqData?.employment?.client1?.employer || '' });
+    autoEmp.push({ _source: 'client1', owner: c1Name, description: pqData?.employment?.client1?.employer || '', retirementDate: c1RetDate, _readOnly: ['owner', 'description', 'retirementDate'] });
   }
   if (pqState.hasSpouse && pqState.employmentClient2 === 'Employed') {
-    autoEmp.push({ _source: 'client2', owner: c2Name, description: pqData?.employment?.client2?.employer || '' });
+    autoEmp.push({ _source: 'client2', owner: c2Name, description: pqData?.employment?.client2?.employer || '', retirementDate: c2RetDate, _readOnly: ['owner', 'description', 'retirementDate'] });
   }
 
   // Merge: keep auto-sourced rows fresh (update owner/description), preserve manual rows and user-entered amounts
@@ -1740,7 +1816,7 @@ function renderIncomeSection(section, pqData) {
     const freshAuto = autoEmp.map(auto => {
       const prev = existingEmp.find(r => r?._source === auto._source);
       if (prev) {
-        return { ...prev, owner: auto.owner, description: auto.description || prev.description };
+        return { ...prev, owner: auto.owner, description: auto.description || prev.description, retirementDate: auto.retirementDate, _readOnly: auto._readOnly };
       }
       return auto;
     });
@@ -1787,7 +1863,7 @@ function renderIncomeSection(section, pqData) {
       { key: 'owner', label: 'Owner', type: 'datalist', options: ownerOptions },
       { key: 'startDate', label: 'Start Date', type: 'date' },
       { key: 'annualAmount', label: 'Annual Amount', type: 'currency' },
-      { key: 'survivorBenefit', label: 'Survivor Benefit', type: 'currency' },
+      { key: 'survivorBenefit', label: 'Survivor Benefit', type: 'percent' },
       { key: 'cola', label: 'COLA %', type: 'percent' },
     ],
     starterRows: [],
@@ -1799,7 +1875,7 @@ function renderIncomeSection(section, pqData) {
   const reData = getDeep(pqData, 'assets.realEstate') || [];
   reData.forEach(r => {
     if (r?.incomeEBT && parseFloat(r.incomeEBT) > 0) {
-      autoOther.push({ _source: 'asset', owner: r.ownership || '', description: r.description || 'Asset Income', annualAmount: parseFloat(r.incomeEBT), notes: 'From assets' });
+      autoOther.push({ _source: 'asset', owner: r.ownership || '', description: r.description || 'Asset Income', annualAmount: parseFloat(r.incomeEBT) * 12, notes: 'From assets', _readOnly: ['owner', 'description', 'annualAmount', 'notes'] });
     }
   });
 
@@ -1864,14 +1940,14 @@ function renderTaxesExpensesSection(section, pqData) {
   const liabData = getDeep(pqData, 'liabilities.items') || [];
   liabData.forEach(l => {
     if (l?.payment && parseFloat(l.payment) > 0) {
-      autoExpenses.push({ _source: 'liability', description: l.description || 'Loan Payment', amount: parseFloat(l.payment) * 12, notes: 'From liabilities' });
+      autoExpenses.push({ _source: 'liability', description: l.description || 'Loan Payment', amount: parseFloat(l.payment) * 12, notes: 'From liabilities', _readOnly: ['description', 'amount', 'notes'] });
     }
   });
 
   const insuranceData = getDeep(pqData, 'insurance.policies') || [];
   insuranceData.forEach(p => {
     if (p?.annualPremium && parseFloat(p.annualPremium) > 0) {
-      autoExpenses.push({ _source: 'insurance', description: 'Insurance Premium - ' + (p.company || 'Unknown'), amount: parseFloat(p.annualPremium), notes: 'From insurance' });
+      autoExpenses.push({ _source: 'insurance', description: 'Insurance Premium - ' + (p.company || 'Unknown'), amount: parseFloat(p.annualPremium), notes: 'From insurance', _readOnly: ['description', 'amount', 'notes'] });
     }
   });
 
@@ -1927,6 +2003,21 @@ function recalcPQComputed() {
   if (dob2 && age2) {
     const v = calcAge(dob2.value);
     if (v !== '') age2.value = v;
+  }
+
+  // Retirement ages (auto-calc from DOB + retirement date)
+  const retDate1 = form.querySelector('[data-path="employment.client1.retirementDate"]');
+  const retAge1 = form.querySelector('[data-path="employment.client1.retirementAge"]');
+  if (dob1 && retDate1 && retAge1 && retDate1.value) {
+    const v = calcAgeAtDate(dob1.value, retDate1.value);
+    if (v !== '') retAge1.value = v;
+  }
+
+  const retDate2 = form.querySelector('[data-path="employment.client2.retirementDate"]');
+  const retAge2 = form.querySelector('[data-path="employment.client2.retirementAge"]');
+  if (dob2 && retDate2 && retAge2 && retDate2.value) {
+    const v = calcAgeAtDate(dob2.value, retDate2.value);
+    if (v !== '') retAge2.value = v;
   }
 
   // Children/grandchildren count from separate tables
@@ -2037,9 +2128,30 @@ function recalcPQComputed() {
 }
 
 /* ---------- PQ FLOATING DASHBOARD ---------- */
+// Persistent notes textarea — survives dashboard re-renders
+let _notesTA = null;
+let _notesDeferPending = false;
+
 function renderPQDashboard() {
   const host = document.getElementById('pq-dashboard');
   if (!host) return;
+
+  // If the advisor notes textarea is focused, defer the rebuild so we don't steal focus
+  if (_notesTA && document.activeElement === _notesTA) {
+    if (!_notesDeferPending) {
+      _notesDeferPending = true;
+      _notesTA.addEventListener('blur', function onBlur() {
+        _notesTA.removeEventListener('blur', onBlur);
+        _notesDeferPending = false;
+        renderPQDashboard();
+      }, { once: true });
+    }
+    return;
+  }
+
+  // Detach persistent notes textarea before clearing so it isn't destroyed
+  if (_notesTA && _notesTA.parentNode) _notesTA.parentNode.removeChild(_notesTA);
+
   clearChildren(host);
   const form = document.getElementById('pq-form');
   if (!form) return;
@@ -2066,11 +2178,11 @@ function renderPQDashboard() {
   totalAssets += sumInputs('[data-path^="assets.cashCd["]', '.marketValue');
   totalAssets += sumInputs('[data-path^="assets.plan529["]', '.marketValue');
   totalAssets += sumInputs('[data-path^="assets.hsa["]', '.marketValue');
+  totalAssets += sumInputs('[data-path^="assets.businessOther["]', '.marketValue');
 
-  // Total Savings = personal additions + company match across retirement accounts
+  // Total Savings = personal additions only (excludes company match)
   let totalSavings = 0;
   totalSavings += sumInputs('[data-path$=".personalAdditions"]');
-  totalSavings += sumInputs('[data-path$=".companyMatch"]');
 
   // Total Liabilities
   const totalLiabilities = sumInputs('[data-path^="liabilities.items["]', '.amount');
@@ -2168,21 +2280,10 @@ function renderPQDashboard() {
   const savingsRatio = totalIncome > 0 ? (totalSavings / totalIncome * 100) : 0;
   const cashFlow = totalIncome - totalSavings - liabilityPayments - totalTax - nonLiabilityExpenses;
 
-  // ── Balance Sheet card ──
-  const card1 = el('div', { className: 'dashboard-card' });
-  card1.appendChild(el('h3', { textContent: 'Balance Sheet' }));
-  const bsMetrics = el('ul', { className: 'metric-list' });
-  [
-    ['Total Assets', fmt$(totalAssets), ''],
-    ['Total Liabilities', fmt$(totalLiabilities), ''],
-    ['Total Net Worth', fmt$(totalNetWorth), totalNetWorth >= 0 ? 'positive' : 'negative'],
-  ].forEach(([label, value, colorClass]) => {
-    const li = el('li');
-    li.appendChild(el('span', { textContent: label }));
-    li.appendChild(el('strong', { className: `metric-value ${colorClass}`.trim(), textContent: value }));
-    bsMetrics.appendChild(li);
-  });
-  card1.appendChild(bsMetrics);
+  // ── Balance Sheet metrics (used in combo card) ──
+  const bsMetrics = el('div', { className: 'bs-total-assets' });
+  bsMetrics.appendChild(el('div', { className: 'bs-assets-label', textContent: 'Total Assets' }));
+  bsMetrics.appendChild(el('div', { className: 'bs-assets-value', textContent: fmt$(totalAssets) }));
 
   // ── Yearly Cash Flow card ──
   const card2 = el('div', { className: 'dashboard-card' });
@@ -2227,96 +2328,185 @@ function renderPQDashboard() {
 
   cardRatios.appendChild(ratios);
 
-  // Completeness Score
-  const card3 = el('div', { className: 'dashboard-card' });
-  card3.appendChild(el('h3', { textContent: 'Completeness' }));
+  // Advisor Notes card — reuse persistent textarea to preserve focus & content
+  const notesCard = el('div', { className: 'dashboard-card notes-panel' });
+  notesCard.appendChild(el('h3', { textContent: 'Advisor Notes' }));
 
-  const allInputs = form.querySelectorAll('input[data-path], select[data-path], textarea[data-path]');
-  let filled = 0, total = 0;
-  allInputs.forEach(inp => {
-    if (inp.type === 'hidden' || inp.readOnly) return;
-    total++;
-    if (inp.value && inp.value.trim() !== '' && inp.value !== '— Select —') filled++;
-  });
-  const pct = total > 0 ? Math.round(filled / total * 100) : 0;
-  const colorClass = pct < 33 ? 'low' : pct < 66 ? 'mid' : 'high';
-  const colorMap = { low: '#dc3545', mid: '#d9a708', high: '#198754' };
-  const strokeColor = colorMap[colorClass];
-
-  // SVG circular progress
-  const ringSize = 90;
-  const strokeWidth = 7;
-  const radius = (ringSize - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (pct / 100) * circumference;
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'completeness-ring');
-  svg.setAttribute('width', ringSize);
-  svg.setAttribute('height', ringSize);
-  svg.setAttribute('viewBox', `0 0 ${ringSize} ${ringSize}`);
-
-  const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  bgCircle.setAttribute('cx', ringSize / 2);
-  bgCircle.setAttribute('cy', ringSize / 2);
-  bgCircle.setAttribute('r', radius);
-  bgCircle.setAttribute('fill', 'none');
-  bgCircle.setAttribute('stroke', '#e5eaef');
-  bgCircle.setAttribute('stroke-width', strokeWidth);
-
-  const fgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  fgCircle.setAttribute('cx', ringSize / 2);
-  fgCircle.setAttribute('cy', ringSize / 2);
-  fgCircle.setAttribute('r', radius);
-  fgCircle.setAttribute('fill', 'none');
-  fgCircle.setAttribute('stroke', strokeColor);
-  fgCircle.setAttribute('stroke-width', strokeWidth);
-  fgCircle.setAttribute('stroke-linecap', 'round');
-  fgCircle.setAttribute('stroke-dasharray', circumference);
-  fgCircle.setAttribute('stroke-dashoffset', offset);
-  fgCircle.setAttribute('transform', `rotate(-90 ${ringSize / 2} ${ringSize / 2})`);
-  fgCircle.style.transition = 'stroke-dashoffset 400ms ease';
-
-  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  text.setAttribute('x', '50%');
-  text.setAttribute('y', '50%');
-  text.setAttribute('dominant-baseline', 'central');
-  text.setAttribute('text-anchor', 'middle');
-  text.setAttribute('class', 'ring-pct-text');
-  text.textContent = pct + '%';
-
-  svg.append(bgCircle, fgCircle, text);
-
-  const ringWrapper = el('div', { className: 'completeness-score' });
-  ringWrapper.appendChild(svg);
-  ringWrapper.appendChild(el('div', { className: 'score-label', textContent: 'Fields completed' }));
-  card3.appendChild(ringWrapper);
-
-  host.append(card1, card2, cardRatios);
-
-  // Left panel — Completeness + Advisor Notes
-  const notesHost = document.getElementById('pq-notes-panel');
-  if (notesHost) {
-    clearChildren(notesHost);
-
-    // Completeness card
-    notesHost.appendChild(card3);
-
-    // Advisor Notes card
-    const notesCard = el('div', { className: 'dashboard-card notes-panel' });
-    notesCard.appendChild(el('h3', { textContent: 'Advisor Notes' }));
-    const notesTA = el('textarea', { placeholder: 'Free-form notes...' });
-    notesTA.dataset.path = '_advisorNotes';
+  if (!_notesTA) {
+    _notesTA = el('textarea', { placeholder: 'Free-form notes...' });
+    _notesTA.dataset.path = '_advisorNotes';
     const store = getStore();
-    if (store._advisorNotes) notesTA.value = store._advisorNotes;
-    notesTA.addEventListener('input', () => {
+    if (store._advisorNotes) _notesTA.value = store._advisorNotes;
+    _notesTA.addEventListener('input', () => {
       const s = getStore();
-      s._advisorNotes = notesTA.value;
+      s._advisorNotes = _notesTA.value;
       saveStore(s);
     });
-    notesCard.appendChild(notesTA);
-    notesHost.appendChild(notesCard);
+    // Prevent Enter from bubbling up and triggering form submit
+    _notesTA.addEventListener('keydown', e => {
+      if (e.key === 'Enter') e.stopPropagation();
+    });
   }
+  notesCard.appendChild(_notesTA);
+
+  // ── Tax Triangle data ──
+  const taxFree = sumInputs('[data-path^="assets.roth["]', '.marketValue')
+                + sumInputs('[data-path^="assets.hsa["]', '.marketValue');
+  const taxDeferred = sumInputs('[data-path^="assets.taxDeferred["]', '.marketValue');
+  const taxable = sumInputs('[data-path^="assets.taxable["]', '.marketValue')
+                + sumInputs('[data-path^="assets.cashCd["]', '.marketValue');
+
+  // ── Combined Balance Sheet + Tax Triangle card ──
+  const comboCard = el('div', { className: 'dashboard-card balance-triangle-card' });
+  const comboInner = el('div', { className: 'balance-triangle-inner' });
+
+  // Left side: Balance Sheet metrics
+  const bsCol = el('div', { className: 'balance-col' });
+  bsCol.appendChild(el('h3', { textContent: 'Balance Sheet' }));
+  bsCol.appendChild(bsMetrics);
+
+  // Liabilities line
+  const liabLine = el('div', { className: 'bs-liab-line' });
+  liabLine.appendChild(el('span', { textContent: 'Total Liabilities' }));
+  liabLine.appendChild(el('strong', { className: 'metric-value', textContent: fmt$(totalLiabilities) }));
+  bsCol.appendChild(liabLine);
+
+  // Net worth highlight
+  const nwBox = el('div', { className: 'bs-net-worth' });
+  nwBox.appendChild(el('span', { textContent: 'Net Worth' }));
+  nwBox.appendChild(el('strong', { className: `metric-value ${totalNetWorth >= 0 ? 'positive' : 'negative'}`, textContent: fmt$(totalNetWorth) }));
+  bsCol.appendChild(nwBox);
+
+  comboInner.appendChild(bsCol);
+
+  // Right side: Tax Triangle — circles at vertices
+  const triCol = el('div', { className: 'triangle-col' });
+
+  const triWrapper = el('div', { className: 'tax-triangle-wrapper' });
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const triSvg = document.createElementNS(svgNS, 'svg');
+  triSvg.setAttribute('viewBox', '0 0 320 280');
+  triSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  // Defs for gradients and shadows
+  const defs = document.createElementNS(svgNS, 'defs');
+
+  // Drop shadow filter
+  const filter = document.createElementNS(svgNS, 'filter');
+  filter.setAttribute('id', 'triShadow');
+  filter.setAttribute('x', '-20%'); filter.setAttribute('y', '-20%');
+  filter.setAttribute('width', '140%'); filter.setAttribute('height', '140%');
+  const feGauss = document.createElementNS(svgNS, 'feGaussianBlur');
+  feGauss.setAttribute('in', 'SourceAlpha'); feGauss.setAttribute('stdDeviation', '3');
+  const feOff = document.createElementNS(svgNS, 'feOffset');
+  feOff.setAttribute('dx', '0'); feOff.setAttribute('dy', '2');
+  const feMerge = document.createElementNS(svgNS, 'feMerge');
+  const fm1 = document.createElementNS(svgNS, 'feMergeNode');
+  const fm2 = document.createElementNS(svgNS, 'feMergeNode');
+  fm2.setAttribute('in', 'SourceGraphic');
+  feMerge.append(fm1, fm2);
+  filter.append(feGauss, feOff, feMerge);
+  defs.appendChild(filter);
+
+  // Gradients
+  const makeGrad = (id, c1, c2) => {
+    const g = document.createElementNS(svgNS, 'linearGradient');
+    g.setAttribute('id', id); g.setAttribute('x1', '0'); g.setAttribute('y1', '0');
+    g.setAttribute('x2', '0'); g.setAttribute('y2', '1');
+    const s1 = document.createElementNS(svgNS, 'stop');
+    s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', c1);
+    const s2 = document.createElementNS(svgNS, 'stop');
+    s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', c2);
+    g.append(s1, s2);
+    defs.appendChild(g);
+  };
+  makeGrad('gradFree', '#1a8fc4', '#1578a8');
+  makeGrad('gradTaxable', '#2b5ea7', '#1e4a8a');
+  makeGrad('gradDeferred', '#0d6efd', '#0a58ca');
+
+  triSvg.appendChild(defs);
+
+  // Vertex centers — tight triangle
+  const topCx = 160, topCy = 80;
+  const blCx = 82, blCy = 210;
+  const brCx = 238, brCy = 210;
+  const cR = 62;
+
+  // Connecting lines
+  const lines = [
+    [topCx, topCy + cR, blCx + cR * 0.65, blCy - cR * 0.65],
+    [blCx + cR, blCy, brCx - cR, brCy],
+    [brCx - cR * 0.65, brCy - cR * 0.65, topCx, topCy + cR],
+  ];
+  lines.forEach(([x1, y1, x2, y2]) => {
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', '#c0cdd8');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-dasharray', '4,3');
+    triSvg.appendChild(line);
+  });
+
+  // Circle node helper
+  const addCircleNode = (cx, cy, gradId, label, value) => {
+    const shadow = document.createElementNS(svgNS, 'circle');
+    shadow.setAttribute('cx', cx); shadow.setAttribute('cy', cy);
+    shadow.setAttribute('r', cR);
+    shadow.setAttribute('filter', 'url(#triShadow)');
+    shadow.setAttribute('fill', 'white');
+    triSvg.appendChild(shadow);
+
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
+    circle.setAttribute('r', cR);
+    circle.setAttribute('fill', `url(#${gradId})`);
+    triSvg.appendChild(circle);
+
+    const glow = document.createElementNS(svgNS, 'circle');
+    glow.setAttribute('cx', cx); glow.setAttribute('cy', cy);
+    glow.setAttribute('r', cR - 3);
+    glow.setAttribute('fill', 'none');
+    glow.setAttribute('stroke', 'rgba(255,255,255,0.2)');
+    glow.setAttribute('stroke-width', '1');
+    triSvg.appendChild(glow);
+
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', cx); lbl.setAttribute('y', cy - 7);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.setAttribute('class', 'tri-node-label');
+    lbl.textContent = label;
+    triSvg.appendChild(lbl);
+
+    const val = document.createElementNS(svgNS, 'text');
+    val.setAttribute('x', cx); val.setAttribute('y', cy + 16);
+    val.setAttribute('text-anchor', 'middle');
+    val.setAttribute('class', 'tri-node-value');
+    val.textContent = fmt$(value);
+    triSvg.appendChild(val);
+  };
+
+  addCircleNode(topCx, topCy, 'gradFree', 'TAX-FREE', taxFree);
+  addCircleNode(blCx, blCy, 'gradTaxable', 'TAXABLE', taxable);
+  addCircleNode(brCx, brCy, 'gradDeferred', 'TAX-DEFERRED', taxDeferred);
+
+  triWrapper.appendChild(triSvg);
+  triCol.appendChild(triWrapper);
+  comboInner.appendChild(triCol);
+  comboCard.appendChild(comboInner);
+
+  // Bottom row: Advisor Notes beside Cash Flow + Key Ratios
+  const bottomRow = el('div', { className: 'dashboard-bottom-row' });
+  bottomRow.appendChild(notesCard);
+  const rightCol = el('div', { className: 'dashboard-metrics-col' });
+  rightCol.append(card2, cardRatios);
+  bottomRow.appendChild(rightCol);
+
+  host.append(comboCard, bottomRow);
+
+  // Clear left panel (no longer used)
+  const notesHost = document.getElementById('pq-notes-panel');
+  if (notesHost) clearChildren(notesHost);
 }
 
 /* Plan Review, Plan Design, IAP, and Client Info Sheet stages removed — PQ-only app */
