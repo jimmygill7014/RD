@@ -2281,9 +2281,8 @@ function renderPQDashboard() {
   const cashFlow = totalIncome - totalSavings - liabilityPayments - totalTax - nonLiabilityExpenses;
 
   // ── Balance Sheet metrics (used in combo card) ──
-  const bsMetrics = el('div', { className: 'bs-total-assets' });
-  bsMetrics.appendChild(el('div', { className: 'bs-assets-label', textContent: 'Total Assets' }));
-  bsMetrics.appendChild(el('div', { className: 'bs-assets-value', textContent: fmt$(totalAssets) }));
+  // Placeholder — actual balance sheet rows are built later where breakdown values exist.
+  const bsMetrics = el('div', { className: 'bs-metrics-placeholder' });
 
   // ── Yearly Cash Flow card ──
   const card2 = el('div', { className: 'dashboard-card' });
@@ -2363,7 +2362,33 @@ function renderPQDashboard() {
   // Left side: Balance Sheet metrics
   const bsCol = el('div', { className: 'balance-col' });
   bsCol.appendChild(el('h3', { textContent: 'Balance Sheet' }));
-  bsCol.appendChild(bsMetrics);
+
+  // Asset subtotals (investable = everything minus real estate & business/other)
+  const realEstateAssets = sumInputs('[data-path^="assets.realEstate["]', '.marketValue');
+  const businessOtherAssets = sumInputs('[data-path^="assets.businessOther["]', '.marketValue');
+  const investableAssets = totalAssets - realEstateAssets - businessOtherAssets;
+
+  // Breakdown wrapper — groups the three asset categories as siblings
+  const bsBreakdown = el('div', { className: 'bs-breakdown' });
+  const makeAssetRow = (label, value, swatch) => {
+    const row = el('div', { className: 'bs-asset-row' });
+    const left = el('div', { className: 'bs-asset-left' });
+    left.appendChild(el('span', { className: `bs-swatch bs-swatch-${swatch}` }));
+    left.appendChild(el('span', { className: 'bs-asset-label', textContent: label }));
+    row.appendChild(left);
+    row.appendChild(el('strong', { className: 'bs-asset-value', textContent: fmt$(value) }));
+    return row;
+  };
+  bsBreakdown.appendChild(makeAssetRow('Investable Assets', investableAssets, 'invest'));
+  bsBreakdown.appendChild(makeAssetRow('Real Estate', realEstateAssets, 'realestate'));
+  bsBreakdown.appendChild(makeAssetRow('Business / Other', businessOtherAssets, 'business'));
+  bsCol.appendChild(bsBreakdown);
+
+  // Total Assets — prominent summary row directly beneath the breakdown
+  const totalAssetsBox = el('div', { className: 'bs-total-assets' });
+  totalAssetsBox.appendChild(el('span', { className: 'bs-total-label', textContent: 'Total Assets' }));
+  totalAssetsBox.appendChild(el('strong', { className: 'bs-total-value', textContent: fmt$(totalAssets) }));
+  bsCol.appendChild(totalAssetsBox);
 
   // Liabilities line
   const liabLine = el('div', { className: 'bs-liab-line' });
