@@ -227,7 +227,7 @@ const pqSections = [
       { key: 'client1FirstName', label: 'Client First Name', width: 'medium', required: true },
       { key: 'client1LastName', label: 'Client Last Name', width: 'medium', required: true },
       { key: 'client1Nickname', label: 'Nickname', width: 'medium' },
-      { key: 'client1DOB', label: 'Date of Birth', type: 'date', width: 'medium', required: true },
+      { key: 'client1DOB', label: 'Date of Birth', type: 'date', width: 'medium' },
       { key: 'client1Age', label: 'Age', type: 'number', width: 'field-2' },
     ],
     conditionalBlocks: [
@@ -496,6 +496,24 @@ function buildTableEl(sectionId, tableDef, existingData) {
 
   const tbody = el('tbody', { dataset: { tablePath: `${sectionId}.${tableDef.key}` } });
   table.appendChild(tbody);
+
+  // Optional totals footer for currency columns
+  let tfoot = null;
+  if (tableDef.showTotals) {
+    tfoot = el('tfoot');
+    const footRow = el('tr');
+    tableDef.columns.forEach((c, ci) => {
+      const td = el('td');
+      if (c.hidden) { td.style.display = 'none'; }
+      else if (ci === 0 && c.type !== 'currency') { td.textContent = 'Total'; td.style.fontWeight = '600'; }
+      else if (c.type === 'currency') { td.classList.add('tfoot-total'); td.dataset.totalCol = c.key; }
+      footRow.appendChild(td);
+    });
+    footRow.appendChild(el('td')); // action column spacer
+    tfoot.appendChild(footRow);
+    table.appendChild(tfoot);
+  }
+
   wrap.appendChild(table);
   block.append(tools, wrap);
 
@@ -583,7 +601,7 @@ function buildTableEl(sectionId, tableDef, existingData) {
     } else {
       actTd.appendChild(el('button', {
         type: 'button', className: 'btn-icon', textContent: '\u00d7',
-        onClick: () => { tr.remove(); reindex(); recalcPQComputed(); }
+        onClick: () => { tr.remove(); reindex(); recalcTotals(); recalcPQComputed(); }
       }));
     }
     tr.appendChild(actTd);
@@ -619,9 +637,29 @@ function buildTableEl(sectionId, tableDef, existingData) {
     });
   }
 
+  // Recalculate tfoot totals for currency columns
+  function recalcTotals() {
+    if (!tfoot) return;
+    const currCols = tableDef.columns.filter(c => c.type === 'currency');
+    currCols.forEach(col => {
+      let sum = 0;
+      Array.from(tbody.children).forEach(tr => {
+        const inp = tr.querySelector(`[data-path$=".${col.key}"]`);
+        if (inp) sum += parseCommas(inp.value) || 0;
+      });
+      const cell = tfoot.querySelector(`[data-total-col="${col.key}"]`);
+      if (cell) cell.textContent = sum ? formatCommas(sum) : '';
+    });
+  }
+
+  if (tfoot) {
+    tbody.addEventListener('input', recalcTotals);
+  }
+
   // Expose addRow/reindex so external sync logic can add/update rows
   tbody._addRow = addRow;
   tbody._reindex = reindex;
+  tbody._recalcTotals = recalcTotals;
   tbody._tableDef = tableDef;
 
   // Enter key moves to next editable cell; at row end, add a new row.
@@ -663,6 +701,7 @@ function buildTableEl(sectionId, tableDef, existingData) {
       if (rowHasAnyData(tr)) return;
       tr.remove();
       reindex();
+      recalcTotals();
     }, 0);
   });
 
@@ -673,7 +712,8 @@ function buildTableEl(sectionId, tableDef, existingData) {
   rows.forEach(r => addRow(r));
   if (!rows.length) addRow();
 
-  addBtn.addEventListener('click', () => addRow());
+  addBtn.addEventListener('click', () => { addRow(); recalcTotals(); });
+  recalcTotals(); // initial calculation after seed rows
   return block;
 }
 
@@ -1576,6 +1616,7 @@ function renderAssetsSection(section, pqData) {
       title: 'Real Estate',
       columns: reColumns,
       starterRows: [],
+      showTotals: true,
     };
     content.appendChild(buildTableEl('assets', reTable, mergedRows.length ? mergedRows : null));
   }
@@ -1585,6 +1626,7 @@ function renderAssetsSection(section, pqData) {
   content.appendChild(buildTableEl('assets', {
     key: 'businessOther',
     title: '',
+    showTotals: true,
     columns: [
       { key: 'description', label: 'Description' },
       { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1627,6 +1669,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'taxDeferred',
       title: 'Tax-Deferred Retirement Accounts',
+      showTotals: true,
       columns: [
         { key: 'custodian', label: 'Custodian' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1643,6 +1686,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'roth',
       title: 'Tax-Free Roth Accounts',
+      showTotals: true,
       columns: [
         { key: 'custodian', label: 'Custodian' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1659,6 +1703,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'taxable',
       title: 'Taxable Non-Retirement Accounts',
+      showTotals: true,
       columns: [
         { key: 'custodian', label: 'Custodian' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1677,6 +1722,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'cashCd',
       title: "Cash & CD's",
+      showTotals: true,
       columns: [
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1690,6 +1736,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'plan529',
       title: '529 Plans',
+      showTotals: true,
       columns: [
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },
@@ -1703,6 +1750,7 @@ function renderAssetsSection(section, pqData) {
     content.appendChild(buildTableEl('assets', {
       key: 'hsa',
       title: 'HSA Accounts',
+      showTotals: true,
       columns: [
         { key: 'description', label: 'Description' },
         { key: 'marketValue', label: 'Market Value', type: 'currency' },

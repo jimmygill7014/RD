@@ -521,6 +521,22 @@ td input, td select {
 .input-symbol--pre  { order: -1; }
 .input-symbol--post { order:  1; }
 
+tfoot td {
+  background: var(--panel-alt);
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+  font: 600 0.84rem "Space Grotesk", sans-serif;
+  padding: 6px;
+  color: var(--text);
+}
+tfoot .tfoot-total:before {
+  content: '$';
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-right: 2px;
+}
+tfoot .tfoot-total:empty:before { content: ''; }
+
 .table-tools {
   display: flex;
   justify-content: space-between;
