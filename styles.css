@@ -1399,3 +1399,274 @@ tr.row-error { background: #fff8f8; }
     padding-left: 0;
   }
 }
+
+/* ===================================================================
+   PRESENTATION MODE
+   =================================================================== */
+
+/* Nav bar */
+.pres-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: linear-gradient(120deg, #0c1e41, #1f3f67 42%, #415877 100%);
+  color: #edf4fb;
+}
+.pres-nav-brand {
+  font: 700 1rem "Space Grotesk", sans-serif;
+  letter-spacing: 0.02em;
+}
+.pres-nav-actions { display: flex; gap: 10px; }
+
+/* Content wrapper */
+.pres-content {
+  padding: 28px 32px;
+  background: #edf1f7;
+  min-height: calc(100vh - 49px);
+}
+
+/* ── Client header ── */
+.pres-client-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 22px;
+  padding-bottom: 16px;
+  border-bottom: 3px solid #1f3f67;
+}
+.pres-client-name {
+  font: 700 2rem "Space Grotesk", sans-serif;
+  color: #0c1e41;
+  line-height: 1.1;
+}
+.pres-client-sub {
+  margin-top: 4px;
+  font: 500 0.9rem "Source Sans 3", sans-serif;
+  color: #5e6f82;
+}
+.pres-prepared {
+  text-align: right;
+  font: 400 0.82rem "Source Sans 3", sans-serif;
+  color: #5e6f82;
+}
+.pres-prepared strong {
+  display: block;
+  font: 700 0.9rem "Space Grotesk", sans-serif;
+  color: #0c1e41;
+  margin-bottom: 2px;
+}
+
+/* ── KPI row ── */
+.pres-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pres-kpi-card {
+  background: #fff;
+  border: 1px solid #dde4ec;
+  border-radius: 10px;
+  padding: 14px 16px;
+  border-top: 4px solid var(--kpi-color, #00a0c4);
+  box-shadow: 0 2px 8px rgba(12,30,65,.06);
+}
+.pres-kpi-label {
+  font: 600 0.65rem "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #5e6f82;
+  margin-bottom: 6px;
+}
+.pres-kpi-value {
+  font: 700 1.25rem "Space Grotesk", sans-serif;
+  color: #0f1e3b;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+.pres-kpi-value.positive { color: #16a34a; }
+.pres-kpi-value.negative { color: #dc2626; }
+
+/* ── Section cards ── */
+.pres-section {
+  background: #fff;
+  border: 1px solid #dde4ec;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(12,30,65,.05);
+}
+.pres-section-header {
+  background: linear-gradient(90deg, #0c1e41 0%, #1f3f67 60%, #2f5482 100%);
+  padding: 9px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.pres-section-title {
+  font: 700 0.72rem "Space Grotesk", sans-serif;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.pres-section-badge {
+  font: 600 0.7rem "Space Grotesk", sans-serif;
+  color: rgba(255,255,255,.65);
+  background: rgba(255,255,255,.12);
+  border-radius: 999px;
+  padding: 2px 10px;
+}
+.pres-section-body { padding: 18px; }
+
+/* ── Two-col layout ── */
+.pres-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+.pres-col-title {
+  font: 700 0.72rem "Space Grotesk", sans-serif;
+  color: #415877;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid #e5eaef;
+}
+.pres-bs-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 0.88rem;
+  border-bottom: 1px solid #f4f6f9;
+}
+.pres-bs-row:last-child { border-bottom: none; }
+.pres-bs-row.is-total {
+  font: 700 0.9rem "Space Grotesk", sans-serif;
+  border-top: 2px solid #1f3f67;
+  border-bottom: none;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.pres-bs-label { color: #334155; }
+.pres-bs-value { font-weight: 600; font-variant-numeric: tabular-nums; color: #0f1e3b; }
+.pres-bs-value.positive { color: #16a34a; }
+.pres-bs-value.negative { color: #dc2626; }
+.pres-bs-indent { padding-left: 14px; color: #5e6f82; font-size: 0.84rem; }
+
+/* ── Cash Flow waterfall ── */
+.pres-cf-table { width: 100%; border-collapse: collapse; }
+.pres-cf-table td {
+  padding: 7px 10px;
+  font-size: 0.88rem;
+  border-bottom: 1px solid #f4f6f9;
+}
+.pres-cf-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.pres-cf-table tr.is-result td {
+  font: 700 0.92rem "Space Grotesk", sans-serif;
+  border-top: 2px solid #1f3f67;
+  background: #f3f7fb;
+  padding-top: 9px;
+}
+.cf-label { color: #334155; }
+.cf-value { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.cf-negative { color: #dc2626; }
+.cf-positive { color: #16a34a; }
+
+/* ── Data tables ── */
+.pres-table-wrap { overflow-x: auto; }
+.pres-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.pres-table th {
+  text-align: left;
+  padding: 8px 10px;
+  background: #f3f7fb;
+  font: 600 0.68rem "Space Grotesk", sans-serif;
+  color: #415877;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid #dde4ec;
+  white-space: nowrap;
+}
+.pres-table th.th-right,
+.pres-table td.td-right { text-align: right; }
+.pres-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf1f4;
+  color: #1e293b;
+  vertical-align: middle;
+}
+.pres-table tr:last-child td { border-bottom: none; }
+.pres-table tr.pres-row-alt td { background: #fafbfc; }
+.pres-table .td-mono { font-variant-numeric: tabular-nums; font-weight: 600; }
+.pres-table tfoot td {
+  padding: 8px 10px;
+  background: #f3f7fb;
+  font: 700 0.84rem "Space Grotesk", sans-serif;
+  border-top: 2px solid #dde4ec;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Tax treatment pills ── */
+.pres-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 2px 9px;
+  font: 600 0.65rem "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+.pill-deferred  { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
+.pill-free      { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.pill-taxable   { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.pill-cash      { background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+.pill-529       { background: #fdf4ff; color: #86198f; border: 1px solid #f5d0fe; }
+.pill-hsa       { background: #fff7ed; color: #9a3412; border: 1px solid #fed7aa; }
+
+/* ── Goals text ── */
+.pres-goals-text {
+  font: 400 0.95rem "Source Sans 3", sans-serif;
+  color: #1e293b;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+/* ── Divider for two-col inside section ── */
+.pres-two-col .pres-col:not(:first-child) {
+  border-left: 1px solid #e5eaef;
+  padding-left: 28px;
+}
+
+/* ── Print styles ── */
+@media print {
+  * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  body { background: white !important; }
+  .topbar { display: none !important; }
+  .no-print { display: none !important; }
+  .screen:not(.is-active) { display: none !important; }
+  .app-shell {
+    box-shadow: none !important;
+    border: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+  .content { padding: 0 !important; background: white !important; }
+  .pres-content { padding: 12px 16px !important; background: white !important; min-height: auto !important; }
+  .pres-kpi-row { page-break-inside: avoid; }
+  .pres-section { page-break-inside: avoid; margin-bottom: 10px; box-shadow: none !important; }
+  .pres-client-header { page-break-inside: avoid; }
+}
+
+@media (max-width: 900px) {
+  .pres-kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .pres-two-col { grid-template-columns: 1fr; }
+}

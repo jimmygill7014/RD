@@ -11,6 +11,7 @@
     <header class="topbar">
       <div class="brand">Pure Financial Advisors</div>
       <div class="topbar-actions">
+        <button type="button" id="presentation-mode-btn" class="btn btn-ghost">Presentation Mode</button>
         <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
         <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Data</button>
         <div class="user-pill">John Smith <span>| Advisor</span></div>
@@ -38,6 +39,18 @@
       </section>
     </main>
   </div>
+
+  <!-- ========== PRESENTATION MODE ========== -->
+  <section id="screen-presentation" class="screen">
+    <div class="pres-nav no-print">
+      <div class="pres-nav-brand">Pure Financial Advisors</div>
+      <div class="pres-nav-actions">
+        <button type="button" id="pres-edit-btn" class="btn btn-light">← Edit</button>
+        <button type="button" id="pres-print-btn" class="btn btn-primary">Print / Save PDF</button>
+      </div>
+    </div>
+    <div id="pres-content" class="pres-content"></div>
+  </section>
 
   <!-- Data Console Overlay -->
   <aside id="data-console" class="data-console" aria-hidden="true">

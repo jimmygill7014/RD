@@ -2657,6 +2657,470 @@ function renderPQDashboard() {
 
 
 /* ==========================================================================
+   PRESENTATION MODE
+   ========================================================================== */
+
+function getPresData() {
+  const form = document.getElementById('pq-form');
+  const liveData = form ? collectForm(form) : {};
+  const store = getStore();
+  const saved = store.pqTemplate || {};
+  const pq = deepMerge(deepClone(saved), liveData);
+  pq.employment = pq.employment || {};
+  pq.employment.client1 = pq.employment.client1 || {};
+  pq.employment.client1.status = pqState.employmentClient1;
+  if (pqState.hasSpouse) {
+    pq.employment.client2 = pq.employment.client2 || {};
+    pq.employment.client2.status = pqState.employmentClient2;
+  }
+  // Ensure goals text is current
+  if (_goalsTA) {
+    pq.goals = pq.goals || {};
+    pq.goals.goals = _goalsTA.value || pq.goals.goals || '';
+  }
+  return pq;
+}
+
+function showPresentation() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
+  document.getElementById('screen-presentation').classList.add('is-active');
+  renderPresentation();
+}
+
+function hidePresentation() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
+  document.getElementById('screen-pq').classList.add('is-active');
+}
+
+/* ---------- PRES HELPERS ---------- */
+
+function makePresSection(title, badge) {
+  const sec = el('div', { className: 'pres-section' });
+  const hdr = el('div', { className: 'pres-section-header' });
+  hdr.appendChild(el('h2', { className: 'pres-section-title', textContent: title }));
+  if (badge) hdr.appendChild(el('span', { className: 'pres-section-badge', textContent: badge }));
+  sec.appendChild(hdr);
+  const body = el('div', { className: 'pres-section-body' });
+  sec.appendChild(body);
+  return { el: sec, body };
+}
+
+function buildPresTable(columns, dataRows, footTotals) {
+  const wrap = el('div', { className: 'pres-table-wrap' });
+  const table = el('table', { className: 'pres-table' });
+
+  // Head
+  const thead = el('thead');
+  const headRow = el('tr');
+  columns.forEach(col => headRow.appendChild(el('th', {
+    textContent: col.label,
+    className: col.right ? 'th-right' : '',
+  })));
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+
+  // Body
+  const tbody = el('tbody');
+  dataRows.forEach((row, i) => {
+    const tr = el('tr', { className: i % 2 !== 0 ? 'pres-row-alt' : '' });
+    columns.forEach(col => {
+      const td = el('td', { className: col.right ? 'td-right td-mono' : '' });
+      if (col.pill) {
+        const span = el('span', { className: `pres-pill ${row[col.pill] || ''}`, textContent: row[col.key] || '—' });
+        td.appendChild(span);
+      } else {
+        td.textContent = row[col.key] != null && row[col.key] !== '' ? row[col.key] : '—';
+      }
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+
+  // Optional footer totals
+  if (footTotals) {
+    const tfoot = el('tfoot');
+    const footRow = el('tr');
+    columns.forEach((col, i) => {
+      const td = el('td', { className: col.right ? 'td-right' : '' });
+      if (footTotals[col.key] != null) td.textContent = footTotals[col.key];
+      else if (i === 0) td.textContent = 'Total';
+      footRow.appendChild(td);
+    });
+    tfoot.appendChild(footRow);
+    table.appendChild(tfoot);
+  }
+
+  wrap.appendChild(table);
+  return wrap;
+}
+
+function presRow(label, value, opts = {}) {
+  const row = el('div', { className: 'pres-bs-row' + (opts.total ? ' is-total' : '') + (opts.indent ? ' pres-bs-indent' : '') });
+  row.appendChild(el('span', { className: 'pres-bs-label', textContent: label }));
+  const valEl = el('span', { className: 'pres-bs-value' + (opts.cls ? ' ' + opts.cls : ''), textContent: value });
+  row.appendChild(valEl);
+  return row;
+}
+
+/* ---------- MAIN RENDER ---------- */
+
+function renderPresentation() {
+  const pq = getPresData();
+  const host = document.getElementById('pres-content');
+  clearChildren(host);
+
+  const family    = pq.family || {};
+  const contact   = pq.contact || {};
+  const assets    = pq.assets || {};
+  const liabs     = pq.liabilities || {};
+  const ins       = pq.insurance || {};
+  const income    = pq.income || {};
+  const taxes     = pq.taxesExpenses || {};
+  const rels      = pq.relationships || {};
+  const goalsData = pq.goals || {};
+
+  const num  = v => parseCommas(String(v || '')) || 0;
+  const sumA = (arr, key) => (arr || []).filter(Boolean).reduce((s, r) => s + num(r[key]), 0);
+  const hasRows = arr => (arr || []).filter(r => r && Object.values(r).some(v => v != null && String(v).trim() !== '' && !String(v).startsWith('_'))).length > 0;
+  const cleanRows = arr => (arr || []).filter(r => r && Object.values(r).some(v => v != null && String(v).trim() !== '' && !String(v).startsWith('_')));
+
+  // ── Client names ──
+  const c1Name = [family.client1FirstName, family.client1LastName].filter(Boolean).join(' ') || 'Client';
+  const c2Name = [family.client2FirstName, family.client2LastName].filter(Boolean).join(' ');
+  const clientDisplay = c2Name ? `${c1Name} & ${c2Name}` : c1Name;
+  const age1 = family.client1Age ? ` (age ${family.client1Age})` : '';
+  const age2 = family.client2Age ? ` (age ${family.client2Age})` : '';
+  const clientAges = c2Name ? `${c1Name}${age1} & ${c2Name}${age2}` : `${c1Name}${age1}`;
+  const cityState = [contact.city, contact.state].filter(Boolean).join(', ');
+
+  // ── Financial totals ──
+  const reAssets   = sumA(assets.realEstate, 'marketValue');
+  const busOther   = sumA(assets.businessOther, 'marketValue');
+  const taxDef     = sumA(assets.taxDeferred, 'marketValue');
+  const rothVal    = sumA(assets.roth, 'marketValue');
+  const taxable    = sumA(assets.taxable, 'marketValue');
+  const cashCd     = sumA(assets.cashCd, 'marketValue');
+  const plan529    = sumA(assets.plan529, 'marketValue');
+  const hsaVal     = sumA(assets.hsa, 'marketValue');
+  const investable = taxDef + rothVal + taxable + cashCd + plan529 + hsaVal;
+  const totalAssets = investable + reAssets + busOther;
+  const totalLiab   = sumA(liabs.items, 'amount');
+  const netWorth    = totalAssets - totalLiab;
+
+  const empInc   = sumA(income.employment, 'annualAmount');
+  const ssInc    = sumA(income.socialSecurity, 'annualAmount');
+  const pensInc  = sumA(income.pension, 'annualAmount');
+  const otherInc = sumA(income.other, 'annualAmount');
+  const totalIncome = empInc + ssInc + pensInc + otherInc;
+
+  const fedTax   = num(taxes.federalTax);
+  const stTax    = num(taxes.stateTax);
+  const ficaTax  = num(taxes.ficaTax);
+  const totalTax = fedTax + stTax + ficaTax;
+
+  const totalSavings = sumA(assets.taxDeferred, 'personalAdditions')
+    + sumA(assets.roth, 'personalAdditions')
+    + sumA(assets.taxable, 'personalAdditions');
+
+  const debtPayments = (liabs.items || []).filter(Boolean)
+    .reduce((s, r) => s + num(r.payment) * 12, 0);
+
+  const expRows = (taxes.expenses || []).filter(Boolean);
+  const livingExp = expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
+    .reduce((s, r) => s + num(r.amount), 0);
+  const totalExpenses = expRows.reduce((s, r) => s + num(r.amount), 0);
+
+  const netCF = totalIncome - totalTax - totalSavings - debtPayments - livingExp;
+
+  // ══════════════════════════════════════════════════
+  // 1. CLIENT HEADER
+  // ══════════════════════════════════════════════════
+  const header = el('div', { className: 'pres-client-header' });
+  const nameBlock = el('div');
+  nameBlock.appendChild(el('div', { className: 'pres-client-name', textContent: clientDisplay }));
+  nameBlock.appendChild(el('div', { className: 'pres-client-sub', textContent: clientAges + (cityState ? '  ·  ' + cityState : '') }));
+  const prepBlock = el('div', { className: 'pres-prepared' });
+  prepBlock.appendChild(el('strong', { textContent: 'Pure Financial Advisors' }));
+  prepBlock.appendChild(document.createTextNode('Prepared: ' + new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })));
+  header.append(nameBlock, prepBlock);
+  host.appendChild(header);
+
+  // ══════════════════════════════════════════════════
+  // 2. KPI CARDS
+  // ══════════════════════════════════════════════════
+  const kpiRow = el('div', { className: 'pres-kpi-row' });
+  [
+    { label: 'Net Worth',        value: fmt$(netWorth),    color: '#1f3f67', cls: netWorth >= 0 ? 'positive' : 'negative' },
+    { label: 'Total Assets',     value: fmt$(totalAssets), color: '#4f46e5', cls: '' },
+    { label: 'Total Liabilities',value: fmt$(totalLiab),   color: '#e11d48', cls: '' },
+    { label: 'Annual Income',    value: fmt$(totalIncome), color: '#059669', cls: '' },
+    { label: 'Net Cash Flow',    value: fmt$(netCF),       color: netCF >= 0 ? '#059669' : '#e11d48', cls: netCF >= 0 ? 'positive' : 'negative' },
+  ].forEach(k => {
+    const card = el('div', { className: 'pres-kpi-card' });
+    card.style.setProperty('--kpi-color', k.color);
+    card.appendChild(el('div', { className: 'pres-kpi-label', textContent: k.label }));
+    card.appendChild(el('div', { className: `pres-kpi-value ${k.cls}`, textContent: k.value }));
+    kpiRow.appendChild(card);
+  });
+  host.appendChild(kpiRow);
+
+  // ══════════════════════════════════════════════════
+  // 3. BALANCE SHEET
+  // ══════════════════════════════════════════════════
+  const bsSec = makePresSection('Balance Sheet');
+  const bsBody = el('div', { className: 'pres-two-col' });
+
+  // Assets column
+  const assetsCol = el('div');
+  assetsCol.appendChild(el('div', { className: 'pres-col-title', textContent: 'Assets' }));
+  if (investable) assetsCol.appendChild(presRow('Investable Assets', fmt$(investable)));
+  if (reAssets)   assetsCol.appendChild(presRow('Real Estate', fmt$(reAssets)));
+  if (busOther)   assetsCol.appendChild(presRow('Business & Other', fmt$(busOther)));
+  assetsCol.appendChild(presRow('Total Assets', fmt$(totalAssets), { total: true }));
+  bsBody.appendChild(assetsCol);
+
+  // Liabilities + Net Worth column
+  const liabCol = el('div');
+  liabCol.appendChild(el('div', { className: 'pres-col-title', textContent: 'Liabilities & Net Worth' }));
+  const liabItems = cleanRows(liabs.items);
+  if (liabItems.length) {
+    liabItems.forEach(r => liabCol.appendChild(presRow(r.description || 'Liability', fmt$(num(r.amount)))));
+  } else {
+    liabCol.appendChild(presRow('No liabilities', '$0'));
+  }
+  liabCol.appendChild(presRow('Total Liabilities', fmt$(totalLiab), { total: true }));
+  liabCol.appendChild(presRow('Net Worth', fmt$(netWorth), { total: true, cls: netWorth >= 0 ? 'positive' : 'negative' }));
+  bsBody.appendChild(liabCol);
+
+  bsSec.body.appendChild(bsBody);
+  host.appendChild(bsSec.el);
+
+  // ══════════════════════════════════════════════════
+  // 4. ANNUAL CASH FLOW
+  // ══════════════════════════════════════════════════
+  const cfSec = makePresSection('Annual Cash Flow');
+  const cfTable = el('table', { className: 'pres-cf-table' });
+  const cfBody = el('tbody');
+  const cfLines = [
+    { label: 'Gross Income',              val: totalIncome,   minus: false },
+    { label: 'Less: Federal & State Tax', val: totalTax,      minus: true  },
+    { label: 'Less: FICA Tax',            val: ficaTax,       minus: true,  skip: ficaTax === 0 },
+    { label: 'Less: Savings & Contributions', val: totalSavings, minus: true },
+    { label: 'Less: Debt Payments',       val: debtPayments,  minus: true  },
+    { label: 'Less: Living Expenses',     val: livingExp,     minus: true  },
+  ];
+  cfLines.forEach(line => {
+    if (line.skip || (!line.val && !line.result)) return;
+    const tr = el('tr');
+    const display = line.minus ? -line.val : line.val;
+    tr.appendChild(el('td', { className: 'cf-label', textContent: line.label }));
+    const valTd = el('td', { className: 'cf-value' + (line.minus && line.val > 0 ? ' cf-negative' : '') });
+    valTd.textContent = (line.minus && line.val > 0 ? '(' : '') + fmt$(line.val) + (line.minus && line.val > 0 ? ')' : '');
+    tr.appendChild(valTd);
+    cfBody.appendChild(tr);
+  });
+  // Net CF result row
+  const cfResultTr = el('tr', { className: 'is-result' });
+  cfResultTr.appendChild(el('td', { className: 'cf-label', textContent: 'Net Cash Flow' }));
+  const cfResultVal = el('td', { className: 'cf-value ' + (netCF >= 0 ? 'cf-positive' : 'cf-negative') });
+  cfResultVal.textContent = fmt$(netCF);
+  cfResultTr.appendChild(cfResultVal);
+  cfBody.appendChild(cfResultTr);
+  cfTable.appendChild(cfBody);
+  cfSec.body.appendChild(cfTable);
+  host.appendChild(cfSec.el);
+
+  // ══════════════════════════════════════════════════
+  // 5. INVESTMENT ACCOUNTS
+  // ══════════════════════════════════════════════════
+  const allAccounts = [
+    ...(assets.taxDeferred || []).filter(Boolean).filter(r => r.custodian || num(r.marketValue)).map(r => ({ ...r, _treat: 'Tax-Deferred', _pillCls: 'pill-deferred', _label: r.custodian || 'Account' })),
+    ...(assets.roth || []).filter(Boolean).filter(r => r.custodian || num(r.marketValue)).map(r => ({ ...r, _treat: 'Tax-Free (Roth)', _pillCls: 'pill-free', _label: r.custodian || 'Account' })),
+    ...(assets.taxable || []).filter(Boolean).filter(r => r.custodian || num(r.marketValue)).map(r => ({ ...r, _treat: 'Taxable', _pillCls: 'pill-taxable', _label: r.custodian || 'Account' })),
+    ...(assets.cashCd || []).filter(Boolean).filter(r => r.description || num(r.marketValue)).map(r => ({ ...r, _treat: 'Cash / CD', _pillCls: 'pill-cash', _label: r.description || 'Account' })),
+    ...(assets.plan529 || []).filter(Boolean).filter(r => r.description || num(r.marketValue)).map(r => ({ ...r, _treat: '529 Plan', _pillCls: 'pill-529', _label: r.description || 'Account' })),
+    ...(assets.hsa || []).filter(Boolean).filter(r => r.description || num(r.marketValue)).map(r => ({ ...r, _treat: 'HSA', _pillCls: 'pill-hsa', _label: r.description || 'Account' })),
+  ];
+  if (allAccounts.length) {
+    const acctSec = makePresSection('Investment Accounts', fmt$(investable));
+    const acctRows = allAccounts.map(r => ({
+      ...r,
+      _mvFmt: fmt$(num(r.marketValue)),
+      _addFmt: num(r.personalAdditions) > 0 ? fmt$(num(r.personalAdditions)) : '',
+    }));
+    acctSec.body.appendChild(buildPresTable([
+      { label: 'Tax Treatment', key: '_treat', pill: '_pillCls' },
+      { label: 'Custodian / Description', key: '_label' },
+      { label: 'Type', key: 'type' },
+      { label: 'Owner', key: 'ownership' },
+      { label: 'Beneficiary', key: 'beneficiary' },
+      { label: 'Annual Addition', key: '_addFmt', right: true },
+      { label: 'Market Value', key: '_mvFmt', right: true },
+    ], acctRows, investable ? { _mvFmt: fmt$(investable) } : null));
+    host.appendChild(acctSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 6. REAL ESTATE
+  // ══════════════════════════════════════════════════
+  const reRows = cleanRows(assets.realEstate);
+  if (reRows.length) {
+    const reSec = makePresSection('Real Estate', fmt$(reAssets));
+    reSec.body.appendChild(buildPresTable([
+      { label: 'Description', key: 'description' },
+      { label: 'Ownership', key: 'ownership' },
+      { label: 'Market Value', key: '_mv', right: true },
+      { label: 'Loan Balance', key: '_loan', right: true },
+      { label: 'Equity', key: '_equity', right: true },
+      { label: 'Mo. Payment', key: '_pmt', right: true },
+      { label: 'Rate', key: '_rate', right: true },
+    ], reRows.map(r => ({
+      ...r,
+      _mv:     fmt$(num(r.marketValue)),
+      _loan:   num(r.remainingLoan) ? fmt$(num(r.remainingLoan)) : '—',
+      _equity: fmt$(num(r.marketValue) - num(r.remainingLoan)),
+      _pmt:    num(r.payment) ? fmt$(num(r.payment)) : '—',
+      _rate:   r.interestRate ? r.interestRate + '%' : '—',
+    }))))
+    host.appendChild(reSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 7. BUSINESS & OTHER ASSETS
+  // ══════════════════════════════════════════════════
+  const busRows = cleanRows(assets.businessOther);
+  if (busRows.length) {
+    const busSec = makePresSection('Business & Other Assets', fmt$(busOther));
+    busSec.body.appendChild(buildPresTable([
+      { label: 'Description', key: 'description' },
+      { label: 'Ownership', key: 'ownership' },
+      { label: 'Cost Basis', key: '_cb', right: true },
+      { label: 'Market Value', key: '_mv', right: true },
+    ], busRows.map(r => ({
+      ...r,
+      _mv: fmt$(num(r.marketValue)),
+      _cb: num(r.costBasis) ? fmt$(num(r.costBasis)) : '—',
+    }))));
+    host.appendChild(busSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 8. LIABILITIES (detail)
+  // ══════════════════════════════════════════════════
+  const liabDetail = cleanRows(liabs.items);
+  if (liabDetail.length) {
+    const liabSec = makePresSection('Liabilities', fmt$(totalLiab));
+    liabSec.body.appendChild(buildPresTable([
+      { label: 'Description', key: 'description' },
+      { label: 'Balance', key: '_amt', right: true },
+      { label: 'Mo. Payment', key: '_pmt', right: true },
+      { label: 'Annual Payment', key: '_annual', right: true },
+      { label: 'Rate', key: '_rate', right: true },
+      { label: 'Term', key: 'term' },
+    ], liabDetail.map(r => ({
+      ...r,
+      _amt:    fmt$(num(r.amount)),
+      _pmt:    num(r.payment) ? fmt$(num(r.payment)) : '—',
+      _annual: num(r.payment) ? fmt$(num(r.payment) * 12) : '—',
+      _rate:   r.interestRate ? r.interestRate + '%' : '—',
+    })), { _amt: fmt$(totalLiab) }));
+    host.appendChild(liabSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 9. INCOME SOURCES
+  // ══════════════════════════════════════════════════
+  const allIncome = [
+    ...(income.employment || []).filter(Boolean).filter(r => num(r.annualAmount) || r.description).map(r => ({ ...r, _itype: 'Employment', _pillCls: 'pill-free' })),
+    ...(income.socialSecurity || []).filter(Boolean).filter(r => num(r.annualAmount)).map(r => ({ ...r, _itype: 'Social Security', description: r.owner || '', _pillCls: 'pill-taxable', ownership: r.owner })),
+    ...(income.pension || []).filter(Boolean).filter(r => num(r.annualAmount) || r.description).map(r => ({ ...r, _itype: 'Pension', _pillCls: 'pill-deferred' })),
+    ...(income.other || []).filter(Boolean).filter(r => num(r.annualAmount) || r.description).map(r => ({ ...r, _itype: 'Other', _pillCls: 'pill-cash' })),
+  ];
+  if (allIncome.length) {
+    const incSec = makePresSection('Income Sources', fmt$(totalIncome));
+    incSec.body.appendChild(buildPresTable([
+      { label: 'Type', key: '_itype', pill: '_pillCls' },
+      { label: 'Owner', key: 'ownership' },
+      { label: 'Description', key: 'description' },
+      { label: 'Annual Amount', key: '_amt', right: true },
+      { label: 'Notes', key: '_notes' },
+    ], allIncome.map(r => ({
+      ...r,
+      _amt:   fmt$(num(r.annualAmount)),
+      _notes: [r.startDate ? 'Start: ' + r.startDate : '', r.cola ? 'COLA: ' + r.cola + '%' : ''].filter(Boolean).join('  '),
+    })), { _amt: fmt$(totalIncome) }));
+    host.appendChild(incSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 10. EXPENSES
+  // ══════════════════════════════════════════════════
+  if (expRows.length) {
+    const expSec = makePresSection('Annual Expenses', fmt$(totalExpenses));
+    expSec.body.appendChild(buildPresTable([
+      { label: 'Description', key: 'description' },
+      { label: 'Annual Amount', key: '_amt', right: true },
+      { label: 'Notes', key: 'notes' },
+    ], expRows.map(r => ({
+      ...r,
+      _amt: fmt$(num(r.amount)),
+    })), { _amt: fmt$(totalExpenses) }));
+    host.appendChild(expSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 11. INSURANCE
+  // ══════════════════════════════════════════════════
+  const insRows = cleanRows(ins.policies);
+  if (insRows.length) {
+    const insSec = makePresSection('Insurance');
+    insSec.body.appendChild(buildPresTable([
+      { label: 'Company', key: 'company' },
+      { label: 'Type', key: 'type' },
+      { label: 'Insured', key: 'insured' },
+      { label: 'Owner', key: 'owner' },
+      { label: 'Death / Daily Benefit', key: '_benefit', right: true },
+      { label: 'Cash Value', key: '_cv', right: true },
+      { label: 'Annual Premium', key: '_prem', right: true },
+      { label: 'Beneficiary', key: 'beneficiary' },
+    ], insRows.map(r => ({
+      ...r,
+      _benefit: num(r.benefit) ? fmt$(num(r.benefit)) : '—',
+      _cv:      num(r.cashValue) ? fmt$(num(r.cashValue)) : '—',
+      _prem:    num(r.annualPremium) ? fmt$(num(r.annualPremium)) : '—',
+    }))));
+    host.appendChild(insSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 12. PROFESSIONAL RELATIONSHIPS
+  // ══════════════════════════════════════════════════
+  const relRows = cleanRows(rels.professionals);
+  if (relRows.length) {
+    const relSec = makePresSection('Professional Relationships');
+    relSec.body.appendChild(buildPresTable([
+      { label: 'Role', key: 'role' },
+      { label: 'Name', key: 'name' },
+      { label: 'Firm', key: 'firmName' },
+      { label: 'City', key: 'city' },
+      { label: 'State', key: 'state' },
+    ], relRows));
+    host.appendChild(relSec.el);
+  }
+
+  // ══════════════════════════════════════════════════
+  // 13. GOALS
+  // ══════════════════════════════════════════════════
+  const goalsText = (goalsData.goals || '').trim();
+  if (goalsText) {
+    const goalsSec = makePresSection('Goals');
+    goalsSec.body.appendChild(el('p', { className: 'pres-goals-text', textContent: goalsText }));
+    host.appendChild(goalsSec.el);
+  }
+}
+
+/* ==========================================================================
    EVENT BINDING
    ========================================================================== */
 
@@ -2724,6 +3188,11 @@ function bindEvents() {
     _pqDraft = {}; // Clear draft on reset
     renderPQ();
   });
+
+  // Presentation mode
+  document.getElementById('presentation-mode-btn').addEventListener('click', showPresentation);
+  document.getElementById('pres-edit-btn').addEventListener('click', hidePresentation);
+  document.getElementById('pres-print-btn').addEventListener('click', () => window.print());
 
   // Data console
   document.getElementById('open-console-btn').addEventListener('click', () => {
