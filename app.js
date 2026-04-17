@@ -2684,12 +2684,14 @@ function getPresData() {
 function showPresentation() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
   document.getElementById('screen-presentation').classList.add('is-active');
+  document.body.classList.add('pres-mode');
   renderPresentation();
 }
 
 function hidePresentation() {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
   document.getElementById('screen-pq').classList.add('is-active');
+  document.body.classList.remove('pres-mode');
 }
 
 /* ---------- PRES HELPERS ---------- */
@@ -3166,10 +3168,16 @@ function bindEvents() {
 
     // Visual confirmation
     const btn = document.getElementById('pq-save-btn');
+    const topBtn = document.getElementById('topbar-save-btn');
     const orig = btn.textContent;
     btn.textContent = 'Saved \u2713';
     btn.disabled = true;
-    setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+    topBtn.textContent = 'Saved \u2713';
+    topBtn.disabled = true;
+    setTimeout(() => {
+      btn.textContent = orig; btn.disabled = false;
+      topBtn.textContent = orig; topBtn.disabled = false;
+    }, 1500);
   });
 
   document.getElementById('pq-reset-btn').addEventListener('click', () => {
@@ -3190,6 +3198,7 @@ function bindEvents() {
   });
 
   // Presentation mode
+  document.getElementById('topbar-save-btn').addEventListener('click', () => document.getElementById('pq-save-btn').click());
   document.getElementById('presentation-mode-btn').addEventListener('click', showPresentation);
   document.getElementById('pres-edit-btn').addEventListener('click', hidePresentation);
   document.getElementById('pres-print-btn').addEventListener('click', () => window.print());

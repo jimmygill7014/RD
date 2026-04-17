@@ -53,13 +53,16 @@ body {
   width: min(1920px, 96vw);
   margin: 20px auto;
   border-radius: 14px;
-  overflow: clip;
+  overflow-x: clip;
   box-shadow: var(--shadow);
   border: 1px solid #24395d;
   background: var(--panel);
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
   min-height: 60px;
   display: flex;
   align-items: center;
@@ -727,10 +730,10 @@ tr.row-error { background: #fff8f8; }
 
 .pq-dashboard {
   position: sticky;
-  top: 20px;
+  top: 80px;
   display: grid;
   gap: 10px;
-  max-height: calc(100vh - 40px);
+  max-height: calc(100vh - 100px);
   overflow-y: auto;
 }
 
@@ -1403,6 +1406,9 @@ tr.row-error { background: #fff8f8; }
 /* ===================================================================
    PRESENTATION MODE
    =================================================================== */
+
+/* Hide main app shell in presentation mode */
+body.pres-mode .app-shell { display: none; }
 
 /* Nav bar */
 .pres-nav {
