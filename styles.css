@@ -220,53 +220,85 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  cursor: pointer;
+  cursor: default;
   user-select: none;
 }
-
-.section-header.static-header { cursor: default; }
 
 .section-header h2 {
   margin: 0;
   font: 700 0.95rem "Space Grotesk", sans-serif;
 }
 
-.section-header .toggle-btn {
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--text);
-  font: 700 0.85rem "Space Grotesk", sans-serif;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.section-header .completion-meter {
+/* ===== SECTION PROGRESS INDICATOR ===== */
+.section-progress {
   display: flex;
   align-items: center;
   gap: 8px;
-  font: 600 0.78rem "Space Grotesk", sans-serif;
-  color: var(--muted);
+  margin-left: auto;
 }
 
-.completion-bar {
-  width: 60px;
-  height: 6px;
-  background: #e5eaef;
+.section-progress-label {
+  font: 600 0.72rem "Space Grotesk", sans-serif;
+  color: var(--muted);
+  min-width: 30px;
+  text-align: right;
+}
+
+.section-progress-track {
+  width: 64px;
+  height: 5px;
+  background: rgba(0,0,0,0.08);
   border-radius: 3px;
   overflow: hidden;
 }
 
-.completion-bar-fill {
+.section-progress-fill {
   height: 100%;
-  background: var(--accent);
   border-radius: 3px;
-  transition: width 300ms ease;
+  background: var(--accent);
+  transition: width 300ms ease, background 300ms ease;
+  width: 0%;
 }
+
+.section-progress.is-complete .section-progress-label {
+  color: #16a34a;
+  font-size: 0.9rem;
+}
+.section-progress.is-complete .section-progress-fill { background: #16a34a !important; }
+
+/* ===== SECTION COLOR THEMES ===== */
+.form-section.theme-blue    { border-left: 4px solid #2563eb; }
+.form-section.theme-teal    { border-left: 4px solid #0891b2; }
+.form-section.theme-violet  { border-left: 4px solid #7c3aed; }
+.form-section.theme-amber   { border-left: 4px solid #d97706; }
+.form-section.theme-emerald { border-left: 4px solid #059669; }
+.form-section.theme-indigo  { border-left: 4px solid #4f46e5; }
+.form-section.theme-rose    { border-left: 4px solid #e11d48; }
+.form-section.theme-sky     { border-left: 4px solid #0284c7; }
+.form-section.theme-green   { border-left: 4px solid #16a34a; }
+.form-section.theme-orange  { border-left: 4px solid #ea580c; }
+
+.form-section.theme-blue    .section-header { background: linear-gradient(180deg, #eff6ff, #dbeafe); }
+.form-section.theme-teal    .section-header { background: linear-gradient(180deg, #f0fdfa, #ccfbf1); }
+.form-section.theme-violet  .section-header { background: linear-gradient(180deg, #f5f3ff, #ede9fe); }
+.form-section.theme-amber   .section-header { background: linear-gradient(180deg, #fffbeb, #fef3c7); }
+.form-section.theme-emerald .section-header { background: linear-gradient(180deg, #ecfdf5, #d1fae5); }
+.form-section.theme-indigo  .section-header { background: linear-gradient(180deg, #eef2ff, #e0e7ff); }
+.form-section.theme-rose    .section-header { background: linear-gradient(180deg, #fff1f2, #ffe4e6); }
+.form-section.theme-sky     .section-header { background: linear-gradient(180deg, #f0f9ff, #e0f2fe); }
+.form-section.theme-green   .section-header { background: linear-gradient(180deg, #f0fdf4, #dcfce7); }
+.form-section.theme-orange  .section-header { background: linear-gradient(180deg, #fff7ed, #ffedd5); }
+
+.form-section.theme-blue    .section-progress-fill { background: #2563eb; }
+.form-section.theme-teal    .section-progress-fill { background: #0891b2; }
+.form-section.theme-violet  .section-progress-fill { background: #7c3aed; }
+.form-section.theme-amber   .section-progress-fill { background: #d97706; }
+.form-section.theme-emerald .section-progress-fill { background: #059669; }
+.form-section.theme-indigo  .section-progress-fill { background: #4f46e5; }
+.form-section.theme-rose    .section-progress-fill { background: #e11d48; }
+.form-section.theme-sky     .section-progress-fill { background: #0284c7; }
+.form-section.theme-green   .section-progress-fill { background: #16a34a; }
+.form-section.theme-orange  .section-progress-fill { background: #ea580c; }
 
 .section-content { padding: 14px; }
 .section-content.collapsed { display: none; }

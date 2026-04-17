@@ -222,6 +222,7 @@ const pqSections = [
   /* ---- 1. FAMILY INFO ---- */
   {
     id: 'family',
+    colorTheme: 'blue',
     title: 'Household / Family',
     fields: [
       { key: 'client1FirstName', label: 'Client First Name', width: 'medium', required: true },
@@ -284,6 +285,7 @@ const pqSections = [
   /* ---- 2. CONTACT / RESIDENCE ---- */
   {
     id: 'contact',
+    colorTheme: 'teal',
     title: 'Contact / Residence',
     fields: [
       { key: 'address1', label: 'Street Address', width: 'wide' },
@@ -303,16 +305,17 @@ const pqSections = [
   /* ---- 3. EMPLOYMENT ---- */
   {
     id: 'employment',
+    colorTheme: 'violet',
     title: 'Employment',
     customRenderer: 'renderEmploymentSection'
   },
 
-  /* ---- 4. GOALS ---- */
+  /* ---- 4. ESTATE PLAN ---- */
   {
     id: 'goals',
-    title: 'Goals & Planning Facts',
+    colorTheme: 'amber',
+    title: 'Estate Plan',
     fields: [
-      { key: 'goals', label: 'Goals', type: 'textarea' },
       { key: 'estatePlan', label: 'Estate Plan', type: 'multiselect', options: ['Trust', 'Will', 'FPOA', 'MPOA'], width: 'medium' },
       { key: 'estatePlanYear', label: 'Year Established / Updated', width: 'medium' },
     ]
@@ -321,6 +324,7 @@ const pqSections = [
   /* ---- 5. PROFESSIONAL RELATIONSHIPS ---- */
   {
     id: 'relationships',
+    colorTheme: 'emerald',
     title: 'Current Professional Relationships',
     tables: [
       {
@@ -344,6 +348,7 @@ const pqSections = [
   /* ---- 6. ASSETS ---- */
   {
     id: 'assets',
+    colorTheme: 'indigo',
     title: 'Assets',
     customRenderer: 'renderAssetsSection'
   },
@@ -351,6 +356,7 @@ const pqSections = [
   /* ---- 7. LIABILITIES ---- */
   {
     id: 'liabilities',
+    colorTheme: 'rose',
     title: 'Liabilities',
     customRenderer: 'renderLiabilitiesSection'
   },
@@ -358,6 +364,7 @@ const pqSections = [
   /* ---- 8. INSURANCE ---- */
   {
     id: 'insurance',
+    colorTheme: 'sky',
     title: 'Insurance',
     tables: [
       {
@@ -380,6 +387,7 @@ const pqSections = [
   /* ---- 9. INCOME ---- */
   {
     id: 'income',
+    colorTheme: 'green',
     title: 'Income',
     customRenderer: 'renderIncomeSection'
   },
@@ -387,6 +395,7 @@ const pqSections = [
   /* ---- 10. TAXES & EXPENSES ---- */
   {
     id: 'taxesExpenses',
+    colorTheme: 'orange',
     title: 'Taxes & Expenses',
     customRenderer: 'renderTaxesExpensesSection'
   },
@@ -766,8 +775,8 @@ const pqState = {
   },
   employmentClient1: 'Employed',
   employmentClient2: 'Employed',
-  // Track which sections are expanded (by section id)
   openSections: { family: true },
+  _initialized: false,
 };
 
 // Temp holder for in-flight PQ data (not yet submitted)
@@ -1165,8 +1174,11 @@ function renderPQ() {
     (pq.family?.children && pq.family.children.length) ||
     (pq.family?.grandchildren && pq.family.grandchildren.length)
   ) pqState.hasChildren = true;
-  if (pq.employment?.client1?.status) pqState.employmentClient1 = pq.employment.client1.status;
-  if (pq.employment?.client2?.status) pqState.employmentClient2 = pq.employment.client2.status;
+  if (!pqState._initialized) {
+    if (pq.employment?.client1?.status) pqState.employmentClient1 = pq.employment.client1.status;
+    if (pq.employment?.client2?.status) pqState.employmentClient2 = pq.employment.client2.status;
+  }
+  pqState._initialized = true;
   // Restore asset checks from dedicated namespace (never conflicts with table data)
   if (pq._assetChecks) {
     Object.keys(pqState.assetChecks).forEach(k => {
@@ -1197,6 +1209,7 @@ function renderPQ() {
   setupEmploymentNameSync();
   // Recalc dashboard on any form input (debounced to avoid excessive redraws)
   setupFormRecalc();
+  requestAnimationFrame(updateSectionProgress);
 }
 
 let _recalcTimer = null;
@@ -1206,21 +1219,61 @@ function setupFormRecalc() {
   form._recalcWired = true;
   form.addEventListener('input', () => {
     clearTimeout(_recalcTimer);
-    _recalcTimer = setTimeout(recalcPQComputed, 150);
+    _recalcTimer = setTimeout(() => { recalcPQComputed(); updateSectionProgress(); }, 150);
+  });
+}
+
+function updateSectionProgress() {
+  document.querySelectorAll('.form-section').forEach(section => {
+    const label = section.querySelector('.section-progress-label');
+    const fill = section.querySelector('.section-progress-fill');
+    const progressEl = section.querySelector('.section-progress');
+    if (!label || !fill || !progressEl) return;
+
+    const content = section.querySelector('.section-content');
+    if (!content) return;
+
+    const inputs = Array.from(content.querySelectorAll(
+      'input:not([type=radio]):not([type=checkbox]):not([type=hidden]):not([readonly]):not([tabindex="-1"]),' +
+      'select, textarea:not([readonly])'
+    ));
+
+    const total = inputs.length;
+    if (total === 0) {
+      label.textContent = '';
+      fill.style.width = '0%';
+      progressEl.classList.remove('is-complete');
+      return;
+    }
+
+    const filled = inputs.filter(inp => String(inp.value || '').trim() !== '').length;
+    const pct = Math.round((filled / total) * 100);
+    fill.style.width = pct + '%';
+
+    if (pct === 100) {
+      label.textContent = '\u2713';
+      progressEl.classList.add('is-complete');
+    } else {
+      label.textContent = filled + '/' + total;
+      progressEl.classList.remove('is-complete');
+    }
   });
 }
 
 function buildPQSection(section, pqData) {
-  const isOpen = !!pqState.openSections[section.id];
-  const wrapper = el('section', { className: 'form-section' });
+  const wrapper = el('section', { className: `form-section theme-${section.colorTheme || 'default'}` });
 
   const header = el('div', { className: 'section-header' });
   header.appendChild(el('h2', { textContent: section.title }));
-  const toggleBtn = el('button', { type: 'button', className: 'toggle-btn', textContent: isOpen ? '\u2212' : '+' });
-  header.appendChild(toggleBtn);
+  const progressEl = el('div', { className: 'section-progress' });
+  progressEl.appendChild(el('span', { className: 'section-progress-label' }));
+  const progressTrack = el('div', { className: 'section-progress-track' });
+  progressTrack.appendChild(el('div', { className: 'section-progress-fill' }));
+  progressEl.appendChild(progressTrack);
+  header.appendChild(progressEl);
   wrapper.appendChild(header);
 
-  const content = el('div', { className: 'section-content' + (isOpen ? '' : ' collapsed') });
+  const content = el('div', { className: 'section-content' });
 
   if (section.note) content.appendChild(el('p', { className: 'section-note', textContent: section.note }));
 
@@ -1359,35 +1412,28 @@ function buildPQSection(section, pqData) {
     });
   }
 
-  header.addEventListener('click', () => {
-    const isCollapsed = content.classList.contains('collapsed');
-    content.classList.toggle('collapsed', !isCollapsed);
-    toggleBtn.textContent = isCollapsed ? '\u2212' : '+';
-    pqState.openSections[section.id] = isCollapsed; // track state
-  });
-
   wrapper.appendChild(content);
   return wrapper;
 }
 
-/* ---------- COLLAPSIBLE SECTION HELPER ---------- */
+/* ---------- SECTION SHELL HELPER ---------- */
 function buildCollapsibleShell(sectionId, title) {
-  const isOpen = !!pqState.openSections[sectionId];
-  const wrapper = el('section', { className: 'form-section' });
+  const themeMap = {
+    employment: 'violet', assets: 'indigo', liabilities: 'rose',
+    income: 'green', taxesExpenses: 'orange',
+  };
+  const wrapper = el('section', { className: `form-section theme-${themeMap[sectionId] || 'default'}` });
   const header = el('div', { className: 'section-header' });
   header.appendChild(el('h2', { textContent: title }));
-  const toggleBtn = el('button', { type: 'button', className: 'toggle-btn', textContent: isOpen ? '\u2212' : '+' });
-  header.appendChild(toggleBtn);
+  const progressEl = el('div', { className: 'section-progress' });
+  progressEl.appendChild(el('span', { className: 'section-progress-label' }));
+  const progressTrack = el('div', { className: 'section-progress-track' });
+  progressTrack.appendChild(el('div', { className: 'section-progress-fill' }));
+  progressEl.appendChild(progressTrack);
+  header.appendChild(progressEl);
   wrapper.appendChild(header);
 
-  const content = el('div', { className: 'section-content' + (isOpen ? '' : ' collapsed') });
-
-  header.addEventListener('click', () => {
-    const isCollapsed = content.classList.contains('collapsed');
-    content.classList.toggle('collapsed', !isCollapsed);
-    toggleBtn.textContent = isCollapsed ? '\u2212' : '+';
-    pqState.openSections[sectionId] = isCollapsed;
-  });
+  const content = el('div', { className: 'section-content' });
 
   wrapper.appendChild(content);
   return { wrapper, content };
@@ -2178,18 +2224,19 @@ function recalcPQComputed() {
 /* ---------- PQ FLOATING DASHBOARD ---------- */
 // Persistent notes textarea — survives dashboard re-renders
 let _notesTA = null;
+let _goalsTA = null;
 let _notesDeferPending = false;
 
 function renderPQDashboard() {
   const host = document.getElementById('pq-dashboard');
   if (!host) return;
 
-  // If the advisor notes textarea is focused, defer the rebuild so we don't steal focus
-  if (_notesTA && document.activeElement === _notesTA) {
+  // If either persistent textarea is focused, defer the rebuild so we don't steal focus
+  if ((_notesTA && document.activeElement === _notesTA) ||
+      (_goalsTA && document.activeElement === _goalsTA)) {
     if (!_notesDeferPending) {
       _notesDeferPending = true;
-      _notesTA.addEventListener('blur', function onBlur() {
-        _notesTA.removeEventListener('blur', onBlur);
+      document.activeElement.addEventListener('blur', function () {
         _notesDeferPending = false;
         renderPQDashboard();
       }, { once: true });
@@ -2197,8 +2244,9 @@ function renderPQDashboard() {
     return;
   }
 
-  // Detach persistent notes textarea before clearing so it isn't destroyed
+  // Detach persistent textareas before clearing so they aren't destroyed
   if (_notesTA && _notesTA.parentNode) _notesTA.parentNode.removeChild(_notesTA);
+  if (_goalsTA && _goalsTA.parentNode) _goalsTA.parentNode.removeChild(_goalsTA);
 
   clearChildren(host);
   const form = document.getElementById('pq-form');
@@ -2375,13 +2423,36 @@ function renderPQDashboard() {
 
   cardRatios.appendChild(ratios);
 
-  // Advisor Notes card — reuse persistent textarea to preserve focus & content
+  // Goals + Advisor Notes card — reuse persistent textareas to preserve focus & content
   const notesCard = el('div', { className: 'dashboard-card notes-panel' });
-  notesCard.appendChild(el('h3', { textContent: 'Advisor Notes' }));
 
+  notesCard.appendChild(el('h3', { textContent: 'Goals', style: { marginBottom: '4px' } }));
+  if (!_goalsTA) {
+    _goalsTA = el('textarea', { placeholder: 'Client goals...' });
+    _goalsTA.dataset.path = 'goals.goals';
+    _goalsTA.style.minHeight = '72px';
+    {
+      const s = getStore();
+      if (s.pqTemplate?.goals?.goals) _goalsTA.value = s.pqTemplate.goals.goals;
+    }
+    _goalsTA.addEventListener('input', () => {
+      const s = getStore();
+      if (!s.pqTemplate) s.pqTemplate = {};
+      if (!s.pqTemplate.goals) s.pqTemplate.goals = {};
+      s.pqTemplate.goals.goals = _goalsTA.value;
+      saveStore(s);
+    });
+    _goalsTA.addEventListener('keydown', e => {
+      if (e.key === 'Enter') e.stopPropagation();
+    });
+  }
+  notesCard.appendChild(_goalsTA);
+
+  notesCard.appendChild(el('h3', { textContent: 'Advisor Notes', style: { marginTop: '10px', marginBottom: '4px' } }));
   if (!_notesTA) {
     _notesTA = el('textarea', { placeholder: 'Free-form notes...' });
     _notesTA.dataset.path = '_advisorNotes';
+    _notesTA.style.minHeight = '72px';
     const store = getStore();
     if (store._advisorNotes) _notesTA.value = store._advisorNotes;
     _notesTA.addEventListener('input', () => {
@@ -2649,6 +2720,7 @@ function bindEvents() {
     Object.keys(pqState.assetChecks).forEach(k => pqState.assetChecks[k] = false);
     pqState.employmentClient1 = 'Employed';
     pqState.employmentClient2 = 'Employed';
+    pqState._initialized = false;
     _pqDraft = {}; // Clear draft on reset
     renderPQ();
   });
