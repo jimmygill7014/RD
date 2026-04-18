@@ -83,6 +83,23 @@ body {
   gap: 12px;
 }
 
+.autosave-status {
+  font-size: 12px;
+  color: #64748b;
+  min-width: 70px;
+  text-align: right;
+  transition: color 0.2s ease, opacity 0.2s ease;
+  opacity: 0;
+}
+.autosave-status.is-saving {
+  color: #64748b;
+  opacity: 1;
+}
+.autosave-status.is-saved {
+  color: #16a34a;
+  opacity: 1;
+}
+
 .user-pill {
   font: 500 0.88rem "Space Grotesk", sans-serif;
 }
@@ -1407,8 +1424,248 @@ tr.row-error { background: #fff8f8; }
    PRESENTATION MODE
    =================================================================== */
 
-/* Hide main app shell in presentation mode */
-body.pres-mode .app-shell { display: none; }
+/* Hide main app shell in presentation / plan mode */
+body.pres-mode .app-shell,
+body.plan-mode .app-shell { display: none; }
+
+/* ==========================================================================
+   PLAN MODE
+   ========================================================================== */
+
+#screen-plan.is-active {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #f0f5fb;
+}
+
+/* Nav bar */
+.plan-nav {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: linear-gradient(120deg, #0c1e41, #1f3f67 42%, #415877 100%);
+  color: #edf4fb;
+}
+.plan-nav-brand {
+  font: 700 1.05rem "Space Grotesk", sans-serif;
+  letter-spacing: 0.02em;
+}
+.plan-nav-actions { display: flex; gap: 10px; }
+
+/* Two-column layout — equal width */
+.plan-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── LEFT: PQ Summary Panel ── */
+.plan-summary {
+  overflow-y: auto;
+  padding: 14px;
+  background: #e8f0fb;
+  border-right: 1px solid #c8d9ee;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.plan-sum-header {
+  background: linear-gradient(135deg, #0c1e41, #1f3f67);
+  color: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.plan-sum-client   { font: 700 1.05rem "Space Grotesk", sans-serif; }
+.plan-sum-ages     { font-size: 0.8rem;  color: #b8d2e7; margin-top: 3px; }
+.plan-sum-location { font-size: 0.77rem; color: #96b4cc; margin-top: 2px; }
+
+.plan-sum-section {
+  background: #fff;
+  border: 1px solid #d4e3f5;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.plan-sum-title {
+  font: 600 0.68rem "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #7090b0;
+  margin-bottom: 7px;
+}
+.plan-sum-big {
+  font: 700 1.55rem "Space Grotesk", sans-serif;
+  margin-bottom: 6px;
+}
+.plan-sum-positive { color: #16a34a; }
+.plan-sum-negative { color: #dc2626; }
+.plan-sum-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2px 0;
+  font-size: 0.81rem;
+  border-bottom: 1px solid #f0f5fb;
+}
+.plan-sum-row:last-child { border-bottom: none; }
+.plan-sum-label { color: #556b87; }
+.plan-sum-value { font: 600 0.81rem "Space Grotesk", sans-serif; color: #1e2a3a; }
+.plan-sum-row.is-total .plan-sum-label,
+.plan-sum-row.is-total .plan-sum-value { font-weight: 700; color: #1e2a3a; }
+
+/* Multi-line (label + sublabel + value) rows — for accounts, liabilities, policies */
+.plan-sum-row-multi { align-items: flex-start; padding: 4px 0; }
+.plan-sum-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+.plan-sum-row-multi .plan-sum-value { white-space: nowrap; padding-left: 10px; }
+.plan-sum-sublabel {
+  font: 400 0.7rem "Space Grotesk", sans-serif;
+  color: #8099b8;
+}
+
+/* Section group header row (e.g., "Tax-Deferred") inside a larger section */
+.plan-sum-grouphead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 7px 0 3px;
+  border-top: 1px solid #eaf1fa;
+  margin-top: 3px;
+}
+.plan-sum-grouphead:first-child { border-top: none; margin-top: 0; padding-top: 0; }
+.plan-sum-grouphead-label {
+  font: 600 0.72rem "Space Grotesk", sans-serif;
+  color: #1e2a3a;
+}
+.plan-sum-grouphead-value {
+  font: 600 0.78rem "Space Grotesk", sans-serif;
+  color: #1e2a3a;
+}
+
+/* Indented child rows under a group header */
+.plan-sum-row-indent { padding-left: 10px; }
+
+/* Notes / goals free-text block */
+.plan-sum-notes {
+  font-size: 0.78rem;
+  color: #334a67;
+  line-height: 1.45;
+  padding: 6px 0 2px;
+  white-space: pre-wrap;
+}
+
+/* ── RIGHT: Plan Order Form ── */
+.plan-form-wrap {
+  overflow-y: auto;
+  padding: 16px 20px 40px;
+  background: #f7fafd;
+}
+#plan-form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 860px;
+  margin: 0 auto;
+}
+
+.plan-form-card {
+  background: #fff;
+  border-radius: 10px;
+  border: 1px solid #e2eaf5;
+  border-left-width: 4px;
+  overflow: hidden;
+}
+
+/* Card color accents */
+.plan-card-blue    { border-left-color: #3b82f6; }
+.plan-card-teal    { border-left-color: #0d9488; }
+.plan-card-amber   { border-left-color: #d97706; }
+.plan-card-violet  { border-left-color: #7c3aed; }
+.plan-card-emerald { border-left-color: #059669; }
+.plan-card-indigo  { border-left-color: #4f46e5; }
+.plan-card-sky     { border-left-color: #0284c7; }
+.plan-card-rose    { border-left-color: #e11d48; }
+.plan-card-orange  { border-left-color: #ea580c; }
+.plan-card-green   { border-left-color: #16a34a; }
+
+.plan-card-blue    .plan-card-header { background: #eff6ff; color: #1d4ed8; border-bottom: 1px solid #bfdbfe; }
+.plan-card-teal    .plan-card-header { background: #f0fdfa; color: #0f766e; border-bottom: 1px solid #99f6e4; }
+.plan-card-amber   .plan-card-header { background: #fffbeb; color: #b45309; border-bottom: 1px solid #fde68a; }
+.plan-card-violet  .plan-card-header { background: #f5f3ff; color: #6d28d9; border-bottom: 1px solid #ddd6fe; }
+.plan-card-emerald .plan-card-header { background: #ecfdf5; color: #047857; border-bottom: 1px solid #a7f3d0; }
+.plan-card-indigo  .plan-card-header { background: #eef2ff; color: #4338ca; border-bottom: 1px solid #c7d2fe; }
+.plan-card-sky     .plan-card-header { background: #f0f9ff; color: #0369a1; border-bottom: 1px solid #bae6fd; }
+.plan-card-rose    .plan-card-header { background: #fff1f2; color: #be123c; border-bottom: 1px solid #fecdd3; }
+.plan-card-orange  .plan-card-header { background: #fff7ed; color: #c2410c; border-bottom: 1px solid #fed7aa; }
+.plan-card-green   .plan-card-header { background: #f0fdf4; color: #15803d; border-bottom: 1px solid #bbf7d0; }
+
+.plan-card-header {
+  padding: 9px 14px;
+  font: 700 0.78rem "Space Grotesk", sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.plan-card-body {
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+/* Fields */
+.plan-field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.plan-field-row--check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.plan-field-label {
+  font: 500 0.77rem "Space Grotesk", sans-serif;
+  color: #556b87;
+}
+.plan-field-input {
+  width: 100%;
+  padding: 6px 9px;
+  border: 1px solid #d1dff0;
+  border-radius: 6px;
+  font: 0.84rem "Space Grotesk", sans-serif;
+  background: #fff;
+  color: #1e2a3a;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+}
+.plan-field-input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
+}
+.plan-field-ta {
+  resize: vertical;
+  min-height: 62px;
+  line-height: 1.45;
+}
+.plan-field-row--check input[type="checkbox"] {
+  width: 15px; height: 15px; flex-shrink: 0; cursor: pointer;
+}
+.plan-field-row--check label {
+  font: 500 0.84rem "Space Grotesk", sans-serif;
+  color: #1e2a3a;
+  cursor: pointer;
+}
 
 /* Nav bar */
 .pres-nav {

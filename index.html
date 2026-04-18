@@ -11,7 +11,9 @@
     <header class="topbar">
       <div class="brand">Pure Financial Advisors</div>
       <div class="topbar-actions">
+        <span id="autosave-status" class="autosave-status" aria-live="polite"></span>
         <button type="button" id="topbar-save-btn" class="btn btn-primary">Save</button>
+        <button type="button" id="plan-mode-btn" class="btn btn-ghost">Plan Mode</button>
         <button type="button" id="presentation-mode-btn" class="btn btn-ghost">Presentation Mode</button>
         <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
         <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Data</button>
@@ -51,6 +53,25 @@
       </div>
     </div>
     <div id="pres-content" class="pres-content"></div>
+  </section>
+
+  <!-- ========== PLAN MODE ========== -->
+  <section id="screen-plan" class="screen">
+    <div class="plan-nav no-print">
+      <div class="plan-nav-brand">Pure Financial Advisors — Plan Order</div>
+      <div class="plan-nav-actions">
+        <button type="button" id="plan-edit-btn" class="btn btn-light">← Back to PQ</button>
+        <button type="button" id="plan-save-btn" class="btn btn-primary">Send to Planning</button>
+      </div>
+    </div>
+    <div class="plan-layout">
+      <aside id="plan-summary" class="plan-summary"></aside>
+      <div class="plan-form-wrap">
+        <form id="plan-form" autocomplete="off">
+          <div id="plan-form-sections"></div>
+        </form>
+      </div>
+    </div>
   </section>
 
   <!-- Data Console Overlay -->

@@ -3123,53 +3123,555 @@ function renderPresentation() {
 }
 
 /* ==========================================================================
+   PLAN MODE
+   ========================================================================== */
+
+const PLAN_ROR_OPTS = ['','100/0','90/10','80/20','70/30','60/40','50/50','40/60','30/70','20/80','10/90','0/100'];
+
+const planSections = [
+  { id: 'documents', title: 'Documents', color: 'blue', fields: [
+    { key: 'investmentStatementOnFile', label: 'Investment Statement on File?',       type: 'checkbox' },
+    { key: 'taxReturnOnFile',           label: 'Tax Return on File?',                 type: 'checkbox' },
+    { key: 'planningLifeRequested',     label: 'Planning Life Requested?',            type: 'checkbox' },
+    { key: 'documentsEmailDate',        label: 'Date E-mail Request for Documents Sent', type: 'date' },
+  ]},
+  { id: 'baseFacts', title: 'Base Facts', color: 'teal', fields: [
+    { key: 'clientRetirementDate', label: 'Client Retirement Date',     type: 'date' },
+    { key: 'spouseRetirementDate', label: 'Spouse Retirement Date',     type: 'date' },
+    { key: 'eMoneyRorPre',  label: 'eMoney RoR Pre-Retirement',  type: 'select', options: PLAN_ROR_OPTS },
+    { key: 'eMoneyRorPost', label: 'eMoney RoR Post-Retirement', type: 'select', options: PLAN_ROR_OPTS },
+    { key: 'baseFactsNotes', label: 'Base Facts Notes', type: 'textarea' },
+  ]},
+  { id: 'observations', title: 'Observations', color: 'amber', fields: [
+    { key: 'currentCashFlow',    label: 'Current Cash Flow',                  type: 'select', options: ['','Surplus','Deficit','Break-Even'] },
+    { key: 'maxingEmployerPlan', label: 'Maxing Employer Retirement Plan?',   type: 'select', options: ['','Yes','No','N/A'] },
+    { key: 'excessCashGoing',    label: 'Where is Excess Cash Going?',        type: 'select', options: ['','Cash','Qualified','Roth','Non-Qualified','Other'] },
+    { key: 'extraCashReserves',  label: 'How Much Extra Cash Reserves?',      type: 'text' },
+    { key: 'onTrackToRetire',    label: 'Are They on Track to Retire?',       type: 'select', options: ['','Yes','No','Unsure'] },
+    { key: 'observationNotes',   label: 'Observation Notes',                  type: 'textarea' },
+  ]},
+  { id: 'taxes', title: 'Taxes', color: 'violet', fields: [
+    { key: 'filingStatus',         label: 'Filing Status This Year',                  type: 'select', options: ['','Married Filing Jointly','Married Filing Separately','Single','Head of Household'] },
+    { key: 'taxReturnDifferences', label: 'Differences From Prior Tax Return',        type: 'textarea' },
+    { key: 'taxBracket',           label: 'What Tax Bracket Are They in Now?',        type: 'textarea' },
+    { key: 'charitablyInclined',   label: 'Charitably Inclined?',                     type: 'textarea' },
+    { key: 'taxesBeforeRMDs',      label: 'Taxes: Higher or Lower Before RMDs Start', type: 'select', options: ['','Higher','Lower','Same'] },
+    { key: 'taxesAfterRMDs',       label: 'Taxes: Higher or Lower After RMDs Start',  type: 'select', options: ['','Higher','Lower','Same'] },
+    { key: 'highLevelStrategies',  label: 'High Level Strategies For This Year',      type: 'textarea' },
+    { key: 'unrealizedCapGains',   label: 'Unrealized Capital Gains?',                type: 'textarea' },
+  ]},
+  { id: 'strategiesCF', title: 'Strategies \u2014 Cash Flow & Retirement', color: 'emerald', fields: [
+    { key: 'cashReservesStrategy',    label: 'Cash Reserves Strategy',     type: 'textarea' },
+    { key: 'ssClaimingStrategy',      label: 'SS Claiming Strategy',       type: 'textarea' },
+    { key: 'otherCashFlowStrategies', label: 'Other Cash Flow Strategies', type: 'textarea' },
+  ]},
+  { id: 'strategiesTax', title: 'Strategies \u2014 Taxes', color: 'indigo', fields: [
+    { key: 'rothConversionStrategy',    label: 'Roth Conversion Strategy',           type: 'textarea' },
+    { key: 'charitableStrategies',      label: 'Charitable Strategies',              type: 'textarea' },
+    { key: 'capitalGains',              label: 'Capital Gains',                      type: 'textarea' },
+    { key: 'capitalGainsWorksheet',     label: 'Capital Gains Worksheet Requested?', type: 'select', options: ['','Yes','No','N/A'] },
+    { key: 'employerPlanContributions', label: 'Employer Plan Contributions',        type: 'textarea' },
+    { key: 'rothIraContributions',      label: 'Roth / IRA Contributions',           type: 'textarea' },
+    { key: 'otherTaxStrategies',        label: 'Other Tax Strategies',               type: 'textarea' },
+  ]},
+  { id: 'strategiesInvest', title: 'Strategies \u2014 Investment Planning', color: 'sky', fields: [
+    { key: 'pureIPS',             label: 'Pure IPS',                                   type: 'text' },
+    { key: 'outside401kRequest',  label: 'Outside 401(k) Request',                     type: 'select', options: ['','Requested','Not Requested','Link Outside Retirement Plan to Pure'] },
+    { key: 'annuityStrategy',     label: 'Annuity Strategy',                           type: 'textarea' },
+    { key: 'morningstarEntered',  label: 'Morningstar Entered During Assessment?',      type: 'select', options: ['','Yes','No'] },
+    { key: 'otherInvestRequests', label: 'Other Investment Requests',                  type: 'textarea' },
+  ]},
+  { id: 'strategiesInsurance', title: 'Strategies \u2014 Insurance & Risk', color: 'rose', fields: [
+    { key: 'lifeInsurance', label: 'Life Insurance',  type: 'textarea' },
+    { key: 'pAndC',         label: 'P&C',             type: 'textarea' },
+    { key: 'ltcDisability', label: 'LTC / Disability', type: 'textarea' },
+  ]},
+  { id: 'strategiesEstate', title: 'Strategies \u2014 Estate Planning', color: 'orange', fields: [
+    { key: 'estatePlanStatus',      label: 'Estate Plan',            type: 'select', options: ['','Has Current Estate Plan','Needs Updated Estate Plan','Needs Estate Plan','No Estate Plan','No Estate Plan Needed'] },
+    { key: 'estatePlanningDetails', label: 'Estate Planning Details', type: 'textarea' },
+  ]},
+  { id: 'altScenarios', title: 'Alternative Scenarios', color: 'green', fields: [
+    { key: 'alternativeScenarios', label: 'Alternative Scenarios', type: 'select', options: ['','Yes','No'] },
+  ]},
+];
+
+/* ---------- Plan Mode navigation ---------- */
+
+function showPlanMode() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
+  document.getElementById('screen-plan').classList.add('is-active');
+  document.body.classList.add('plan-mode');
+  renderPlanMode();
+}
+
+function hidePlanMode() {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('is-active'));
+  document.getElementById('screen-pq').classList.add('is-active');
+  document.body.classList.remove('plan-mode');
+}
+
+/* ---------- Plan Mode render ---------- */
+
+function renderPlanMode() {
+  renderPlanSummary();
+  renderPlanForm();
+}
+
+function _planFinancials() {
+  const pq = getPresData();
+  const assets = pq.assets || {};
+  const liabs  = pq.liabilities || {};
+  const income = pq.income || {};
+  const taxes  = pq.taxesExpenses || {};
+  const num  = v => parseCommas(String(v || '')) || 0;
+  const sumA = (arr, key) => (arr || []).filter(Boolean).reduce((s, r) => s + num(r[key]), 0);
+
+  const taxDef   = sumA(assets.taxDeferred, 'marketValue');
+  const rothVal  = sumA(assets.roth,        'marketValue');
+  const taxable  = sumA(assets.taxable,     'marketValue');
+  const cashCd   = sumA(assets.cashCd,      'marketValue');
+  const plan529  = sumA(assets.plan529,     'marketValue');
+  const hsaVal   = sumA(assets.hsa,         'marketValue');
+  const reAssets = sumA(assets.realEstate,  'marketValue');
+  const busOther = sumA(assets.businessOther,'marketValue');
+  const investable   = taxDef + rothVal + taxable + cashCd + plan529 + hsaVal;
+  const totalAssets  = investable + reAssets + busOther;
+  const totalLiab    = sumA(liabs.items, 'amount');
+  const netWorth     = totalAssets - totalLiab;
+
+  const empInc   = sumA(income.employment,    'annualAmount');
+  const ssInc    = sumA(income.socialSecurity,'annualAmount');
+  const pensInc  = sumA(income.pension,       'annualAmount');
+  const otherInc = sumA(income.other,         'annualAmount');
+  const totalIncome = empInc + ssInc + pensInc + otherInc;
+
+  const fedTax  = num(taxes.federalTax);
+  const stTax   = num(taxes.stateTax);
+  const ficaTax = num(taxes.ficaTax);
+  const totalTax = fedTax + stTax + ficaTax;
+
+  const totalSavings = sumA(assets.taxDeferred,'personalAdditions')
+    + sumA(assets.roth,'personalAdditions') + sumA(assets.taxable,'personalAdditions');
+  const debtPayments = (liabs.items || []).filter(Boolean)
+    .reduce((s, r) => s + num(r.payment) * 12, 0);
+  const expRows  = (taxes.expenses || []).filter(Boolean);
+  const livingExp = expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
+    .reduce((s, r) => s + num(r.amount), 0);
+  const netCF = totalIncome - totalTax - totalSavings - debtPayments - livingExp;
+
+  return { pq, assets, taxDef, rothVal, taxable, cashCd, plan529, hsaVal,
+           investable, reAssets, busOther, totalAssets, totalLiab, netWorth,
+           empInc, ssInc, pensInc, otherInc, totalIncome,
+           fedTax, stTax, ficaTax, totalTax, totalSavings, debtPayments, livingExp, netCF };
+}
+
+function renderPlanSummary() {
+  const host = document.getElementById('plan-summary');
+  clearChildren(host);
+
+  const f = _planFinancials();
+  const { pq, investable, reAssets, busOther, totalAssets, totalLiab, netWorth,
+          empInc, ssInc, pensInc, otherInc, totalIncome,
+          taxDef, rothVal, taxable, cashCd, plan529, hsaVal,
+          fedTax, stTax, ficaTax, totalTax, totalSavings, debtPayments, livingExp, netCF } = f;
+
+  const family  = pq.family        || {};
+  const contact = pq.contact       || {};
+  const assets  = pq.assets        || {};
+  const liabs   = pq.liabilities   || {};
+  const income  = pq.income        || {};
+  const taxes   = pq.taxesExpenses || {};
+  const ins     = pq.insurance     || {};
+  const rels    = pq.relationships || {};
+  const emp     = pq.employment    || {};
+  const goals   = pq.goals         || {};
+
+  const num = v => parseCommas(String(v || '')) || 0;
+  const cleanRows = arr => (arr || []).filter(r => r && Object.values(r).some(v => v != null && String(v).trim() !== '' && !String(v).startsWith('_')));
+
+  const c1Name = [family.client1FirstName, family.client1LastName].filter(Boolean).join(' ') || 'Client 1';
+  const c2Name = [family.client2FirstName, family.client2LastName].filter(Boolean).join(' ');
+  const clientDisplay = c2Name ? `${c1Name} & ${c2Name}` : c1Name;
+  const age1 = family.client1Age ? ` (age ${family.client1Age})` : '';
+  const age2 = family.client2Age ? ` (age ${family.client2Age})` : '';
+  const ageDisplay = c2Name ? `${c1Name}${age1} & ${c2Name}${age2}` : `${c1Name}${age1}`;
+  const cityState = [contact.city, contact.state].filter(Boolean).join(', ');
+
+  /* ── builders ── */
+  const mkRow = (label, value, total = false) => {
+    const d = el('div', { className: 'plan-sum-row' + (total ? ' is-total' : '') });
+    d.appendChild(el('span', { className: 'plan-sum-label', textContent: label }));
+    d.appendChild(el('span', { className: 'plan-sum-value', textContent: value }));
+    return d;
+  };
+  const mkAcctRow = (label, sub, value, indent = false) => {
+    const d = el('div', { className: 'plan-sum-row plan-sum-row-multi' + (indent ? ' plan-sum-row-indent' : '') });
+    const leftCol = el('div', { className: 'plan-sum-row-main' });
+    leftCol.appendChild(el('span', { className: 'plan-sum-label', textContent: label }));
+    if (sub) leftCol.appendChild(el('span', { className: 'plan-sum-sublabel', textContent: sub }));
+    d.appendChild(leftCol);
+    if (value) d.appendChild(el('span', { className: 'plan-sum-value', textContent: value }));
+    return d;
+  };
+  const mkGroupHead = (label, value) => {
+    const d = el('div', { className: 'plan-sum-grouphead' });
+    d.appendChild(el('span', { className: 'plan-sum-grouphead-label', textContent: label }));
+    if (value) d.appendChild(el('span', { className: 'plan-sum-grouphead-value', textContent: value }));
+    return d;
+  };
+  const mkSection = title => {
+    const s = el('div', { className: 'plan-sum-section' });
+    s.appendChild(el('div', { className: 'plan-sum-title', textContent: title }));
+    return s;
+  };
+
+  /* ── Client header ── */
+  const hdr = el('div', { className: 'plan-sum-header' });
+  hdr.appendChild(el('div', { className: 'plan-sum-client', textContent: clientDisplay }));
+  if (ageDisplay !== clientDisplay) hdr.appendChild(el('div', { className: 'plan-sum-ages', textContent: ageDisplay }));
+  if (cityState) hdr.appendChild(el('div', { className: 'plan-sum-location', textContent: cityState }));
+  host.appendChild(hdr);
+
+  /* ── Contact ── */
+  if (contact.email || contact.phone || contact.addressLine1 || contact.city) {
+    const s = mkSection('Contact');
+    if (contact.email) s.appendChild(mkRow('Email', contact.email));
+    if (contact.phone) s.appendChild(mkRow('Phone', contact.phone));
+    const addr = [contact.addressLine1, contact.city, contact.state, contact.zip].filter(Boolean).join(', ');
+    if (addr) s.appendChild(mkRow('Address', addr));
+    host.appendChild(s);
+  }
+
+  /* ── Family ── */
+  const children = cleanRows(family.children);
+  if (family.maritalStatus || children.length) {
+    const s = mkSection('Family');
+    if (family.maritalStatus) s.appendChild(mkRow('Marital Status', family.maritalStatus));
+    if (children.length) {
+      s.appendChild(mkRow('Children', children.length.toString(), true));
+      children.forEach(c => {
+        const cn = [c.firstName, c.lastName].filter(Boolean).join(' ') || 'Child';
+        const sub = [c.age ? 'age ' + c.age : '', c.dateOfBirth ? 'DOB ' + c.dateOfBirth : ''].filter(Boolean).join(' · ');
+        s.appendChild(mkAcctRow(cn, sub, '', true));
+      });
+    }
+    host.appendChild(s);
+  }
+
+  /* ── Employment ── */
+  const addPerson = (sec, name, status, empData) => {
+    sec.appendChild(mkRow(name, status || '—', true));
+    const sub = [empData.occupation, empData.employer].filter(Boolean).join(' @ ');
+    if (sub) sec.appendChild(mkAcctRow('Occupation', '', sub, true));
+    if (empData.annualIncome) sec.appendChild(mkAcctRow('Annual Income', '', fmt$(num(empData.annualIncome)), true));
+    if (empData.retirementDate) sec.appendChild(mkAcctRow('Retirement Date', '', empData.retirementDate, true));
+  };
+  const empSec = mkSection('Employment');
+  addPerson(empSec, c1Name, pqState.employmentClient1, emp.client1 || {});
+  if (pqState.hasSpouse) addPerson(empSec, c2Name || 'Spouse', pqState.employmentClient2, emp.client2 || {});
+  host.appendChild(empSec);
+
+  /* ── Net Worth ── */
+  const nwSec = mkSection('Net Worth');
+  nwSec.appendChild(el('div', { className: 'plan-sum-big ' + (netWorth >= 0 ? 'plan-sum-positive' : 'plan-sum-negative'), textContent: fmt$(netWorth) }));
+  nwSec.appendChild(mkRow('Total Assets', fmt$(totalAssets)));
+  nwSec.appendChild(mkRow('Total Liabilities', fmt$(totalLiab), true));
+  host.appendChild(nwSec);
+
+  /* ── Investment Accounts (detailed) ── */
+  const acctGroups = [
+    { key: 'taxDeferred', label: 'Tax-Deferred',  total: taxDef },
+    { key: 'roth',        label: 'Roth',          total: rothVal },
+    { key: 'taxable',     label: 'Taxable',       total: taxable },
+    { key: 'cashCd',      label: 'Cash / CD',     total: cashCd },
+    { key: 'plan529',     label: '529 Plan',      total: plan529 },
+    { key: 'hsa',         label: 'HSA',           total: hsaVal },
+  ];
+  const hasAnyAcct = acctGroups.some(g => cleanRows(assets[g.key]).length > 0);
+  if (hasAnyAcct) {
+    const s = mkSection('Investment Accounts');
+    acctGroups.forEach(g => {
+      const rows = cleanRows(assets[g.key]);
+      if (!rows.length) return;
+      s.appendChild(mkGroupHead(g.label, fmt$(g.total)));
+      rows.forEach(r => {
+        const lbl = r.custodian || r.description || 'Account';
+        const subParts = [r.type, r.ownership, r.beneficiary ? 'Bene: ' + r.beneficiary : ''].filter(Boolean);
+        if (num(r.personalAdditions) > 0) subParts.push('Adds: ' + fmt$(num(r.personalAdditions)) + '/yr');
+        s.appendChild(mkAcctRow(lbl, subParts.join(' · '), fmt$(num(r.marketValue)), true));
+      });
+    });
+    s.appendChild(mkRow('Investable Total', fmt$(investable), true));
+    host.appendChild(s);
+  }
+
+  /* ── Real Estate ── */
+  const reRows = cleanRows(assets.realEstate);
+  if (reRows.length) {
+    const s = mkSection('Real Estate');
+    reRows.forEach(r => {
+      const subParts = [r.ownership];
+      if (num(r.remainingLoan)) subParts.push('Loan: ' + fmt$(num(r.remainingLoan)));
+      if (num(r.payment)) subParts.push('Pmt: ' + fmt$(num(r.payment)) + '/mo');
+      if (r.interestRate) subParts.push(r.interestRate + '%');
+      s.appendChild(mkAcctRow(r.description || 'Property', subParts.filter(Boolean).join(' · '), fmt$(num(r.marketValue))));
+    });
+    s.appendChild(mkRow('Total', fmt$(reAssets), true));
+    host.appendChild(s);
+  }
+
+  /* ── Business & Other ── */
+  const busRows = cleanRows(assets.businessOther);
+  if (busRows.length) {
+    const s = mkSection('Business & Other Assets');
+    busRows.forEach(r => {
+      const subParts = [r.ownership, num(r.costBasis) ? 'Basis: ' + fmt$(num(r.costBasis)) : ''].filter(Boolean);
+      s.appendChild(mkAcctRow(r.description || 'Asset', subParts.join(' · '), fmt$(num(r.marketValue))));
+    });
+    s.appendChild(mkRow('Total', fmt$(busOther), true));
+    host.appendChild(s);
+  }
+
+  /* ── Liabilities ── */
+  const liabRows = cleanRows(liabs.items);
+  if (liabRows.length) {
+    const s = mkSection('Liabilities');
+    liabRows.forEach(r => {
+      const subParts = [];
+      if (num(r.payment)) subParts.push('Pmt: ' + fmt$(num(r.payment)) + '/mo');
+      if (r.interestRate) subParts.push(r.interestRate + '%');
+      if (r.term) subParts.push(r.term);
+      s.appendChild(mkAcctRow(r.description || 'Liability', subParts.join(' · '), fmt$(num(r.amount))));
+    });
+    s.appendChild(mkRow('Total Liabilities', fmt$(totalLiab), true));
+    host.appendChild(s);
+  }
+
+  /* ── Income Sources (detailed) ── */
+  const incGroups = [
+    { key: 'employment',     label: 'Employment' },
+    { key: 'socialSecurity', label: 'Social Security' },
+    { key: 'pension',        label: 'Pension' },
+    { key: 'other',          label: 'Other' },
+  ];
+  const hasAnyInc = incGroups.some(g => cleanRows(income[g.key]).length > 0);
+  if (hasAnyInc) {
+    const s = mkSection('Income Sources');
+    incGroups.forEach(g => {
+      const rows = cleanRows(income[g.key]);
+      if (!rows.length) return;
+      const total = rows.reduce((sum, r) => sum + num(r.annualAmount), 0);
+      s.appendChild(mkGroupHead(g.label, fmt$(total)));
+      rows.forEach(r => {
+        const label = r.description || r.owner || g.label;
+        const subParts = [];
+        if (r.owner && r.description) subParts.push(r.owner);
+        if (r.startDate) subParts.push('Start: ' + r.startDate);
+        if (r.cola) subParts.push('COLA: ' + r.cola + '%');
+        s.appendChild(mkAcctRow(label, subParts.join(' · '), fmt$(num(r.annualAmount)), true));
+      });
+    });
+    s.appendChild(mkRow('Total Income', fmt$(totalIncome), true));
+    host.appendChild(s);
+  }
+
+  /* ── Annual Cash Flow ── */
+  const cfSec = mkSection('Annual Cash Flow');
+  cfSec.appendChild(mkRow('Gross Income', fmt$(totalIncome)));
+  if (totalTax)      cfSec.appendChild(mkRow('Less: Tax',       '(' + fmt$(totalTax) + ')'));
+  if (totalSavings)  cfSec.appendChild(mkRow('Less: Savings',   '(' + fmt$(totalSavings) + ')'));
+  if (debtPayments)  cfSec.appendChild(mkRow('Less: Debt Pmts', '(' + fmt$(debtPayments) + ')'));
+  if (livingExp)     cfSec.appendChild(mkRow('Less: Living Exp','(' + fmt$(livingExp) + ')'));
+  const netRow = mkRow('Net Cash Flow', fmt$(netCF), true);
+  netRow.querySelector('.plan-sum-value').classList.add(netCF >= 0 ? 'plan-sum-positive' : 'plan-sum-negative');
+  cfSec.appendChild(netRow);
+  host.appendChild(cfSec);
+
+  /* ── Taxes ── */
+  if (totalTax > 0) {
+    const s = mkSection('Taxes');
+    if (fedTax)  s.appendChild(mkRow('Federal', fmt$(fedTax)));
+    if (stTax)   s.appendChild(mkRow('State',   fmt$(stTax)));
+    if (ficaTax) s.appendChild(mkRow('FICA',    fmt$(ficaTax)));
+    s.appendChild(mkRow('Total Tax', fmt$(totalTax), true));
+    if (totalIncome > 0) s.appendChild(mkRow('Effective Rate', ((totalTax / totalIncome) * 100).toFixed(1) + '%'));
+    host.appendChild(s);
+  }
+
+  /* ── Expenses ── */
+  const expRows = cleanRows(taxes.expenses);
+  if (expRows.length) {
+    const s = mkSection('Annual Expenses');
+    expRows.forEach(r => {
+      s.appendChild(mkAcctRow(r.description || 'Expense', r.notes || '', fmt$(num(r.amount))));
+    });
+    const totalExp = expRows.reduce((sum, r) => sum + num(r.amount), 0);
+    s.appendChild(mkRow('Total Expenses', fmt$(totalExp), true));
+    host.appendChild(s);
+  }
+
+  /* ── Insurance ── */
+  const insRows = cleanRows(ins.policies);
+  if (insRows.length) {
+    const s = mkSection('Insurance');
+    insRows.forEach(r => {
+      const label = [r.company, r.type].filter(Boolean).join(' \u2014 ') || 'Policy';
+      const subParts = [];
+      if (r.insured) subParts.push('Insured: ' + r.insured);
+      if (r.owner)   subParts.push('Owner: ' + r.owner);
+      if (num(r.benefit))   subParts.push('Benefit: ' + fmt$(num(r.benefit)));
+      if (num(r.cashValue)) subParts.push('CV: ' + fmt$(num(r.cashValue)));
+      if (r.beneficiary)    subParts.push('Bene: ' + r.beneficiary);
+      const val = num(r.annualPremium) ? fmt$(num(r.annualPremium)) + '/yr' : '';
+      s.appendChild(mkAcctRow(label, subParts.join(' · '), val));
+    });
+    host.appendChild(s);
+  }
+
+  /* ── Professional Relationships ── */
+  const relRows = cleanRows(rels.professionals);
+  if (relRows.length) {
+    const s = mkSection('Professional Relationships');
+    relRows.forEach(r => {
+      const label = r.role || 'Professional';
+      const subParts = [r.firmName, [r.city, r.state].filter(Boolean).join(', ')].filter(Boolean);
+      s.appendChild(mkAcctRow(label, subParts.join(' · '), r.name || '—'));
+    });
+    host.appendChild(s);
+  }
+
+  /* ── Estate Plan & Goals ── */
+  const ep = goals.estatePlan;
+  const goalsTxt = (goals.goals || '').trim();
+  if ((ep && ep.length) || goals.estatePlanYear || goalsTxt) {
+    const s = mkSection('Estate Plan & Goals');
+    if (ep && ep.length)         s.appendChild(mkRow('Plan Components', Array.isArray(ep) ? ep.join(', ') : ep));
+    if (goals.estatePlanYear)    s.appendChild(mkRow('Year Established', goals.estatePlanYear));
+    if (goalsTxt)                s.appendChild(el('div', { className: 'plan-sum-notes', textContent: goalsTxt }));
+    host.appendChild(s);
+  }
+}
+
+function renderPlanForm() {
+  const host = document.getElementById('plan-form-sections');
+  clearChildren(host);
+
+  const saved = (getStore().planOrder) || {};
+  const f = _planFinancials();
+
+  // Smart prefills
+  const netCF = f.netCF;
+  const cashFlowPrefill = saved.currentCashFlow ||
+    (f.totalIncome > 0 ? (netCF > 50 ? 'Surplus' : netCF < -50 ? 'Deficit' : 'Break-Even') : '');
+  const prefill = {
+    clientRetirementDate: f.pq.employment?.client1?.retirementDate || '',
+    spouseRetirementDate: f.pq.employment?.client2?.retirementDate || '',
+    currentCashFlow: cashFlowPrefill,
+  };
+
+  planSections.forEach(section => {
+    const card = el('div', { className: `plan-form-card plan-card-${section.color}` });
+    card.appendChild(el('div', { className: 'plan-card-header', textContent: section.title }));
+    const body = el('div', { className: 'plan-card-body' });
+
+    section.fields.forEach(field => {
+      const val = saved[field.key] !== undefined ? saved[field.key] : (prefill[field.key] || '');
+      const row = el('div', { className: 'plan-field-row' + (field.type === 'checkbox' ? ' plan-field-row--check' : '') });
+
+      if (field.type === 'checkbox') {
+        const inp = el('input', { type: 'checkbox', id: `plan-${field.key}`, name: field.key });
+        if (val === true || val === 'true') inp.checked = true;
+        row.appendChild(inp);
+        row.appendChild(el('label', { htmlFor: `plan-${field.key}`, textContent: field.label }));
+      } else {
+        row.appendChild(el('label', { htmlFor: `plan-${field.key}`, className: 'plan-field-label', textContent: field.label }));
+        if (field.type === 'select') {
+          const sel = el('select', { id: `plan-${field.key}`, name: field.key, className: 'plan-field-input' });
+          (field.options || []).forEach(opt => {
+            const o = el('option', { value: opt, textContent: opt || '\u2014 Select \u2014' });
+            if (val === opt) o.selected = true;
+            sel.appendChild(o);
+          });
+          row.appendChild(sel);
+        } else if (field.type === 'textarea') {
+          const ta = el('textarea', { id: `plan-${field.key}`, name: field.key, className: 'plan-field-input plan-field-ta', rows: 3 });
+          ta.value = val || '';
+          row.appendChild(ta);
+        } else {
+          const inp = el('input', { type: field.type || 'text', id: `plan-${field.key}`, name: field.key, className: 'plan-field-input' });
+          inp.value = val || '';
+          row.appendChild(inp);
+        }
+      }
+      body.appendChild(row);
+    });
+
+    card.appendChild(body);
+    host.appendChild(card);
+  });
+}
+
+function collectPlanForm() {
+  const form = document.getElementById('plan-form');
+  const data = {};
+  if (!form) return data;
+  form.querySelectorAll('input, select, textarea').forEach(inp => {
+    if (!inp.name) return;
+    data[inp.name] = inp.type === 'checkbox' ? inp.checked : inp.value;
+  });
+  return data;
+}
+
+function savePlanOrder() {
+  const data = collectPlanForm();
+  const store = getStore();
+  store.planOrder = data;
+  store.workflow = store.workflow || {};
+  store.workflow.planOrderSavedAt = new Date().toISOString();
+  saveStore(store);
+  const btn = document.getElementById('plan-save-btn');
+  const orig = btn.textContent;
+  btn.textContent = 'Sent \u2713';
+  btn.disabled = true;
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 1500);
+}
+
+/* ==========================================================================
    EVENT BINDING
    ========================================================================== */
 
-function bindEvents() {
-  // PQ form
-  const pqForm = document.getElementById('pq-form');
-  pqForm.addEventListener('input', e => {
-    if (e.target?.dataset?.path === '_advisorNotes') return;
-    recalcPQComputed();
+function doSavePQ(pqForm, { silent = false } = {}) {
+  const data = collectForm(pqForm);
+  data.family = data.family || {};
+  data.family.hasSpouse = pqState.hasSpouse;
+  data.family.hasChildren = pqState.hasChildren;
+  data.assets = data.assets || {};
+  Object.keys(pqState.assetChecks).forEach(k => {
+    data.assets[k] = pqState.assetChecks[k];
   });
-  pqForm.addEventListener('submit', e => {
-    e.preventDefault();
-    const data = collectForm(pqForm);
-    // Save checkbox states
-    data.family = data.family || {};
-    data.family.hasSpouse = pqState.hasSpouse;
-    data.family.hasChildren = pqState.hasChildren;
-    // Save asset checkbox states
-    data.assets = data.assets || {};
-    Object.keys(pqState.assetChecks).forEach(k => {
-      data.assets[k] = pqState.assetChecks[k];
-    });
-    // Save employment status from radio buttons
-    data.employment = data.employment || {};
-    data.employment.client1 = data.employment.client1 || {};
-    data.employment.client1.status = pqState.employmentClient1;
-    if (pqState.hasSpouse) {
-      data.employment.client2 = data.employment.client2 || {};
-      data.employment.client2.status = pqState.employmentClient2;
-    }
+  data.employment = data.employment || {};
+  data.employment.client1 = data.employment.client1 || {};
+  data.employment.client1.status = pqState.employmentClient1;
+  if (pqState.hasSpouse) {
+    data.employment.client2 = data.employment.client2 || {};
+    data.employment.client2.status = pqState.employmentClient2;
+  }
 
-    const store = getStore();
-    store.pqTemplate = data;
-    store.workflow = store.workflow || {};
-    store.workflow.pqSavedAt = new Date().toISOString();
-    saveStore(store);
-    _pqDraft = {}; // Clear draft after successful save
+  const store = getStore();
+  store.pqTemplate = data;
+  store.workflow = store.workflow || {};
+  store.workflow.pqSavedAt = new Date().toISOString();
+  saveStore(store);
+  _pqDraft = {};
 
-    // Notify parent Lightning component (when running inside Salesforce)
-    if (window.parent !== window) {
-      window.parent.postMessage({ type: 'PQ_SAVE', payload: data }, '*');
-    }
+  if (window.parent !== window) {
+    window.parent.postMessage({ type: 'PQ_SAVE', payload: data }, '*');
+  }
 
-    // Visual confirmation
+  if (!silent) {
     const btn = document.getElementById('pq-save-btn');
     const topBtn = document.getElementById('topbar-save-btn');
-    const orig = btn.textContent;
+    const orig = 'Save';
     btn.textContent = 'Saved \u2713';
     btn.disabled = true;
     topBtn.textContent = 'Saved \u2713';
@@ -3178,6 +3680,59 @@ function bindEvents() {
       btn.textContent = orig; btn.disabled = false;
       topBtn.textContent = orig; topBtn.disabled = false;
     }, 1500);
+  }
+  return data;
+}
+
+let _autosaveTimer = null;
+let _autosaveStatusTimer = null;
+function setAutosaveStatus(state) {
+  const el = document.getElementById('autosave-status');
+  if (!el) return;
+  clearTimeout(_autosaveStatusTimer);
+  if (state === 'saving') {
+    el.textContent = 'Saving\u2026';
+    el.className = 'autosave-status is-saving';
+  } else if (state === 'saved') {
+    el.textContent = 'Saved \u2713';
+    el.className = 'autosave-status is-saved';
+    _autosaveStatusTimer = setTimeout(() => {
+      el.textContent = '';
+      el.className = 'autosave-status';
+    }, 2000);
+  } else {
+    el.textContent = '';
+    el.className = 'autosave-status';
+  }
+}
+function scheduleAutosave(pqForm) {
+  clearTimeout(_autosaveTimer);
+  setAutosaveStatus('saving');
+  _autosaveTimer = setTimeout(() => {
+    try {
+      doSavePQ(pqForm, { silent: true });
+      setAutosaveStatus('saved');
+    } catch (err) {
+      console.error('Autosave failed', err);
+      setAutosaveStatus('');
+    }
+  }, 800);
+}
+
+function bindEvents() {
+  // PQ form
+  const pqForm = document.getElementById('pq-form');
+  pqForm.addEventListener('input', e => {
+    scheduleAutosave(pqForm);
+    if (e.target?.dataset?.path === '_advisorNotes') return;
+    recalcPQComputed();
+  });
+  pqForm.addEventListener('change', () => scheduleAutosave(pqForm));
+  pqForm.addEventListener('submit', e => {
+    e.preventDefault();
+    clearTimeout(_autosaveTimer);
+    doSavePQ(pqForm, { silent: false });
+    setAutosaveStatus('');
   });
 
   document.getElementById('pq-reset-btn').addEventListener('click', () => {
@@ -3199,6 +3754,9 @@ function bindEvents() {
 
   // Presentation mode
   document.getElementById('topbar-save-btn').addEventListener('click', () => document.getElementById('pq-save-btn').click());
+  document.getElementById('plan-mode-btn').addEventListener('click', showPlanMode);
+  document.getElementById('plan-edit-btn').addEventListener('click', hidePlanMode);
+  document.getElementById('plan-save-btn').addEventListener('click', savePlanOrder);
   document.getElementById('presentation-mode-btn').addEventListener('click', showPresentation);
   document.getElementById('pres-edit-btn').addEventListener('click', hidePresentation);
   document.getElementById('pres-print-btn').addEventListener('click', () => window.print());
