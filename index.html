@@ -3,18 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Pure Financial Advisors — PQ Discovery Intake</title>
+  <title>Pure Financial Advisors — Personal Financial Questionnaire</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand">Pure Financial Advisors</div>
+      <a class="brand" href="#" aria-label="Pure Financial Advisors">
+        <span class="brand-text">Pure Financial Advisors</span>
+      </a>
       <div class="topbar-actions">
         <span id="autosave-status" class="autosave-status" aria-live="polite"></span>
         <button type="button" id="topbar-save-btn" class="btn btn-primary">Save</button>
-        <button type="button" id="plan-mode-btn" class="btn btn-ghost">Plan Mode</button>
         <button type="button" id="presentation-mode-btn" class="btn btn-ghost">Presentation Mode</button>
+        <button type="button" id="plan-mode-btn" class="btn btn-ghost">Plan Mode</button>
         <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
         <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Data</button>
         <div class="user-pill">John Smith <span>| Advisor</span></div>
@@ -25,8 +27,7 @@
       <!-- ========== PQ DISCOVERY INTAKE ========== -->
       <section id="screen-pq" class="screen is-active">
         <section class="page-title">
-          <h1>PQ Discovery Intake</h1>
-          <p>Capture discovery information and known facts</p>
+          <h1>Personal Financial Questionnaire</h1>
         </section>
         <form id="pq-form" autocomplete="off">
           <div class="pq-layout">
@@ -46,7 +47,9 @@
   <!-- ========== PRESENTATION MODE ========== -->
   <section id="screen-presentation" class="screen">
     <div class="pres-nav no-print">
-      <div class="pres-nav-brand">Pure Financial Advisors</div>
+      <div class="pres-nav-brand brand" aria-label="Pure Financial Advisors">
+        <span class="brand-text">Pure Financial Advisors</span>
+      </div>
       <div class="pres-nav-actions">
         <button type="button" id="pres-edit-btn" class="btn btn-light">← Edit</button>
         <button type="button" id="pres-print-btn" class="btn btn-primary">Print / Save PDF</button>
@@ -58,7 +61,11 @@
   <!-- ========== PLAN MODE ========== -->
   <section id="screen-plan" class="screen">
     <div class="plan-nav no-print">
-      <div class="plan-nav-brand">Pure Financial Advisors — Plan Order</div>
+      <div class="plan-nav-brand brand" aria-label="Pure Financial Advisors — Plan Order">
+        <span class="brand-text">Pure Financial Advisors</span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-context">Plan Order</span>
+      </div>
       <div class="plan-nav-actions">
         <button type="button" id="plan-edit-btn" class="btn btn-light">← Back to PQ</button>
         <button type="button" id="plan-save-btn" class="btn btn-primary">Send to Planning</button>

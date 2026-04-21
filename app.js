@@ -412,6 +412,7 @@ function buildFieldEl(field, sectionId, formType) {
   let cls = widthMap[field.width] || 'field';
   if (field.type === 'textarea') cls = 'field-full';
   if (field.type === 'computed') cls += ' field-computed';
+  if (field.emphasis === 'total') cls += ' field-total';
 
   const wrapper = el('label', { className: cls + (formType === 'plan' ? ' flag-red' : '') });
 
@@ -2000,7 +2001,7 @@ function renderIncomeSection(section, pqData) {
 
   // Total income display
   const totalRow = el('div', { className: 'grid', style: { marginTop: '10px' } });
-  totalRow.appendChild(buildFieldEl({ key: 'totalIncome', label: 'Total Income', type: 'computed', width: 'medium' }, 'income', 'pq'));
+  totalRow.appendChild(buildFieldEl({ key: 'totalIncome', label: 'Total Income', type: 'computed', width: 'medium', emphasis: 'total' }, 'income', 'pq'));
   content.appendChild(totalRow);
 
   return wrapper;
@@ -2020,13 +2021,34 @@ function renderTaxesExpensesSection(section, pqData) {
     { key: 'federalTax', label: 'Federal Taxes Paid', type: 'currency', width: 'medium' },
     { key: 'stateTax', label: 'State Taxes Paid', type: 'currency', width: 'medium' },
     { key: 'ficaTax', label: 'FICA Taxes Paid', type: 'currency', width: 'medium' },
-    { key: 'totalTaxesPaid', label: 'Total Taxes Paid', type: 'computed', width: 'medium' },
+    { key: 'totalTaxesPaid', label: 'Total Taxes Paid', type: 'computed', width: 'medium', emphasis: 'total' },
   ];
   taxFields.forEach(f => taxGrid.appendChild(buildFieldEl(f, 'taxesExpenses', 'pq')));
   content.appendChild(taxGrid);
 
-  // Expenses subsection
-  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Expenses', style: { marginTop: '18px' } }));
+  // Separate Living Expenses field (outside the expense table)
+  // Strip any "Living Expenses" rows from the expense table — this field is now the sole source.
+  const isLivingExpenseRow = (r) => r && typeof r.description === 'string' && r.description.trim().toLowerCase() === 'living expenses';
+  let livingExpVal = getDeep(pqData, 'taxesExpenses.livingExpenses');
+  const legacyExisting = getDeep(pqData, 'taxesExpenses.expenses');
+  if (Array.isArray(legacyExisting)) {
+    for (let i = legacyExisting.length - 1; i >= 0; i--) {
+      const row = legacyExisting[i];
+      if (!isLivingExpenseRow(row)) continue;
+      if ((livingExpVal == null || livingExpVal === '') && row.amount) {
+        livingExpVal = row.amount;
+        setDeep(pqData, 'taxesExpenses.livingExpenses', livingExpVal);
+      }
+      legacyExisting.splice(i, 1);
+    }
+  }
+
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Living Expenses', style: { marginTop: '18px' } }));
+  const livingGrid = el('div', { className: 'grid' });
+  livingGrid.appendChild(buildFieldEl({ key: 'livingExpenses', label: 'Annual Amount', type: 'currency', width: 'medium' }, 'taxesExpenses', 'pq'));
+  content.appendChild(livingGrid);
+
+  content.appendChild(el('h3', { className: 'subsection-title', textContent: 'Other Expenses', style: { marginTop: '18px' } }));
   content.appendChild(el('p', { className: 'section-note', textContent: 'Known loan payments are prefilled from Liabilities.' }));
 
   // Build auto-sourced expense rows from Liabilities and Insurance
@@ -2046,20 +2068,18 @@ function renderTaxesExpensesSection(section, pqData) {
   });
 
   // Merge: always keep auto-sourced rows fresh, preserve manual rows
+  // Strip any "Living Expenses" row — that value lives in the separate field above.
   let existingExp = getDeep(pqData, 'taxesExpenses.expenses');
   let mergedExp;
   if (existingExp?.length) {
-    // Keep only manually-entered rows (no _source)
-    const manualRows = existingExp.filter(r => r && !r._source);
+    const manualRows = existingExp.filter(r => r && !r._source && !isLivingExpenseRow(r));
     mergedExp = [...autoExpenses, ...manualRows];
   } else {
-    // First time: auto rows + Living Expenses default
-    mergedExp = [...autoExpenses, { description: 'Living Expenses' }];
+    mergedExp = [...autoExpenses];
   }
 
   content.appendChild(buildTableEl('taxesExpenses', {
     key: 'expenses',
-    title: 'Expense Lines',
     columns: [
       { key: '_source', label: '', hidden: true },
       { key: 'description', label: 'Description' },
@@ -2073,7 +2093,7 @@ function renderTaxesExpensesSection(section, pqData) {
   }, mergedExp));
 
   const totalRow = el('div', { className: 'grid', style: { marginTop: '10px' } });
-  totalRow.appendChild(buildFieldEl({ key: 'expenseTotal', label: 'Total Expenses', type: 'computed', width: 'medium' }, 'taxesExpenses', 'pq'));
+  totalRow.appendChild(buildFieldEl({ key: 'expenseTotal', label: 'Total Expenses', type: 'computed', width: 'medium', emphasis: 'total' }, 'taxesExpenses', 'pq'));
   content.appendChild(totalRow);
 
   return wrapper;
@@ -2209,12 +2229,14 @@ function recalcPQComputed() {
   const totalTaxEl = form.querySelector('[data-path="taxesExpenses.totalTaxesPaid"]');
   if (totalTaxEl) totalTaxEl.value = fmt$(totalTax);
 
-  // Total expenses
+  // Total expenses (separate Living Expenses field + expense line rows)
   const expInputs = form.querySelectorAll('[data-path^="taxesExpenses.expenses["]');
   let totalExp = 0;
   expInputs.forEach(inp => {
     if (inp.dataset.path.endsWith('.amount')) totalExp += parseCommas(inp.value) || 0;
   });
+  const livingExpInput = form.querySelector('[data-path="taxesExpenses.livingExpenses"]');
+  if (livingExpInput) totalExp += parseCommas(livingExpInput.value) || 0;
   const totalExpEl = form.querySelector('[data-path="taxesExpenses.expenseTotal"]');
   if (totalExpEl) totalExpEl.value = fmt$(totalExp);
 
@@ -2369,6 +2391,9 @@ function renderPQDashboard() {
       }
     });
   }
+  // Separate Living Expenses field rolls into Non-Liability Expenses
+  const livingExpDashInput = form.querySelector('[data-path="taxesExpenses.livingExpenses"]');
+  nonLiabilityExpenses += parseCommas(livingExpDashInput?.value) || 0;
 
   // Derived metrics
   const totalNetWorth = totalAssets - totalLiabilities;
@@ -2525,116 +2550,8 @@ function renderPQDashboard() {
 
   // Right side: Tax Triangle — circles at vertices
   const triCol = el('div', { className: 'triangle-col' });
-
   const triWrapper = el('div', { className: 'tax-triangle-wrapper' });
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const triSvg = document.createElementNS(svgNS, 'svg');
-  triSvg.setAttribute('viewBox', '0 0 320 280');
-  triSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-
-  // Defs for gradients and shadows
-  const defs = document.createElementNS(svgNS, 'defs');
-
-  // Drop shadow filter
-  const filter = document.createElementNS(svgNS, 'filter');
-  filter.setAttribute('id', 'triShadow');
-  filter.setAttribute('x', '-20%'); filter.setAttribute('y', '-20%');
-  filter.setAttribute('width', '140%'); filter.setAttribute('height', '140%');
-  const feGauss = document.createElementNS(svgNS, 'feGaussianBlur');
-  feGauss.setAttribute('in', 'SourceAlpha'); feGauss.setAttribute('stdDeviation', '3');
-  const feOff = document.createElementNS(svgNS, 'feOffset');
-  feOff.setAttribute('dx', '0'); feOff.setAttribute('dy', '2');
-  const feMerge = document.createElementNS(svgNS, 'feMerge');
-  const fm1 = document.createElementNS(svgNS, 'feMergeNode');
-  const fm2 = document.createElementNS(svgNS, 'feMergeNode');
-  fm2.setAttribute('in', 'SourceGraphic');
-  feMerge.append(fm1, fm2);
-  filter.append(feGauss, feOff, feMerge);
-  defs.appendChild(filter);
-
-  // Gradients
-  const makeGrad = (id, c1, c2) => {
-    const g = document.createElementNS(svgNS, 'linearGradient');
-    g.setAttribute('id', id); g.setAttribute('x1', '0'); g.setAttribute('y1', '0');
-    g.setAttribute('x2', '0'); g.setAttribute('y2', '1');
-    const s1 = document.createElementNS(svgNS, 'stop');
-    s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', c1);
-    const s2 = document.createElementNS(svgNS, 'stop');
-    s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', c2);
-    g.append(s1, s2);
-    defs.appendChild(g);
-  };
-  makeGrad('gradFree', '#1a8fc4', '#1578a8');
-  makeGrad('gradTaxable', '#2b5ea7', '#1e4a8a');
-  makeGrad('gradDeferred', '#0d6efd', '#0a58ca');
-
-  triSvg.appendChild(defs);
-
-  // Vertex centers — tight triangle
-  const topCx = 160, topCy = 80;
-  const blCx = 82, blCy = 210;
-  const brCx = 238, brCy = 210;
-  const cR = 62;
-
-  // Connecting lines
-  const lines = [
-    [topCx, topCy + cR, blCx + cR * 0.65, blCy - cR * 0.65],
-    [blCx + cR, blCy, brCx - cR, brCy],
-    [brCx - cR * 0.65, brCy - cR * 0.65, topCx, topCy + cR],
-  ];
-  lines.forEach(([x1, y1, x2, y2]) => {
-    const line = document.createElementNS(svgNS, 'line');
-    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-    line.setAttribute('stroke', '#c0cdd8');
-    line.setAttribute('stroke-width', '1.5');
-    line.setAttribute('stroke-dasharray', '4,3');
-    triSvg.appendChild(line);
-  });
-
-  // Circle node helper
-  const addCircleNode = (cx, cy, gradId, label, value) => {
-    const shadow = document.createElementNS(svgNS, 'circle');
-    shadow.setAttribute('cx', cx); shadow.setAttribute('cy', cy);
-    shadow.setAttribute('r', cR);
-    shadow.setAttribute('filter', 'url(#triShadow)');
-    shadow.setAttribute('fill', 'white');
-    triSvg.appendChild(shadow);
-
-    const circle = document.createElementNS(svgNS, 'circle');
-    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
-    circle.setAttribute('r', cR);
-    circle.setAttribute('fill', `url(#${gradId})`);
-    triSvg.appendChild(circle);
-
-    const glow = document.createElementNS(svgNS, 'circle');
-    glow.setAttribute('cx', cx); glow.setAttribute('cy', cy);
-    glow.setAttribute('r', cR - 3);
-    glow.setAttribute('fill', 'none');
-    glow.setAttribute('stroke', 'rgba(255,255,255,0.2)');
-    glow.setAttribute('stroke-width', '1');
-    triSvg.appendChild(glow);
-
-    const lbl = document.createElementNS(svgNS, 'text');
-    lbl.setAttribute('x', cx); lbl.setAttribute('y', cy - 7);
-    lbl.setAttribute('text-anchor', 'middle');
-    lbl.setAttribute('class', 'tri-node-label');
-    lbl.textContent = label;
-    triSvg.appendChild(lbl);
-
-    const val = document.createElementNS(svgNS, 'text');
-    val.setAttribute('x', cx); val.setAttribute('y', cy + 16);
-    val.setAttribute('text-anchor', 'middle');
-    val.setAttribute('class', 'tri-node-value');
-    val.textContent = fmt$(value);
-    triSvg.appendChild(val);
-  };
-
-  addCircleNode(topCx, topCy, 'gradFree', 'TAX-FREE', taxFree);
-  addCircleNode(blCx, blCy, 'gradTaxable', 'TAXABLE', taxable);
-  addCircleNode(brCx, brCy, 'gradDeferred', 'TAX-DEFERRED', taxDeferred);
-
-  triWrapper.appendChild(triSvg);
+  triWrapper.appendChild(buildTaxTriangleSVG(taxFree, taxable, taxDeferred));
   triCol.appendChild(triWrapper);
   comboInner.appendChild(triCol);
   comboCard.appendChild(comboInner);
@@ -2654,6 +2571,117 @@ function renderPQDashboard() {
 }
 
 /* Plan Review, Plan Design, IAP, and Client Info Sheet stages removed — PQ-only app */
+
+/* ---------- TAX TRIANGLE SVG BUILDER ---------- */
+function buildTaxTriangleSVG(taxFree, taxable, taxDeferred, opts = {}) {
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const idSuffix = opts.idSuffix || '';
+  const svg = document.createElementNS(svgNS, 'svg');
+  svg.setAttribute('viewBox', '0 0 320 280');
+  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+  const defs = document.createElementNS(svgNS, 'defs');
+
+  const filter = document.createElementNS(svgNS, 'filter');
+  const filterId = 'triShadow' + idSuffix;
+  filter.setAttribute('id', filterId);
+  filter.setAttribute('x', '-20%'); filter.setAttribute('y', '-20%');
+  filter.setAttribute('width', '140%'); filter.setAttribute('height', '140%');
+  const feGauss = document.createElementNS(svgNS, 'feGaussianBlur');
+  feGauss.setAttribute('in', 'SourceAlpha'); feGauss.setAttribute('stdDeviation', '3');
+  const feOff = document.createElementNS(svgNS, 'feOffset');
+  feOff.setAttribute('dx', '0'); feOff.setAttribute('dy', '2');
+  const feMerge = document.createElementNS(svgNS, 'feMerge');
+  const fm1 = document.createElementNS(svgNS, 'feMergeNode');
+  const fm2 = document.createElementNS(svgNS, 'feMergeNode');
+  fm2.setAttribute('in', 'SourceGraphic');
+  feMerge.append(fm1, fm2);
+  filter.append(feGauss, feOff, feMerge);
+  defs.appendChild(filter);
+
+  const makeGrad = (id, c1, c2) => {
+    const g = document.createElementNS(svgNS, 'linearGradient');
+    g.setAttribute('id', id); g.setAttribute('x1', '0'); g.setAttribute('y1', '0');
+    g.setAttribute('x2', '0'); g.setAttribute('y2', '1');
+    const s1 = document.createElementNS(svgNS, 'stop');
+    s1.setAttribute('offset', '0%'); s1.setAttribute('stop-color', c1);
+    const s2 = document.createElementNS(svgNS, 'stop');
+    s2.setAttribute('offset', '100%'); s2.setAttribute('stop-color', c2);
+    g.append(s1, s2);
+    defs.appendChild(g);
+  };
+  const gradFreeId = 'gradFree' + idSuffix;
+  const gradTaxableId = 'gradTaxable' + idSuffix;
+  const gradDeferredId = 'gradDeferred' + idSuffix;
+  makeGrad(gradFreeId, '#1a8fc4', '#1578a8');
+  makeGrad(gradTaxableId, '#2b5ea7', '#1e4a8a');
+  makeGrad(gradDeferredId, '#0d6efd', '#0a58ca');
+
+  svg.appendChild(defs);
+
+  const topCx = 160, topCy = 80;
+  const blCx = 82, blCy = 210;
+  const brCx = 238, brCy = 210;
+  const cR = 62;
+
+  const lines = [
+    [topCx, topCy + cR, blCx + cR * 0.65, blCy - cR * 0.65],
+    [blCx + cR, blCy, brCx - cR, brCy],
+    [brCx - cR * 0.65, brCy - cR * 0.65, topCx, topCy + cR],
+  ];
+  lines.forEach(([x1, y1, x2, y2]) => {
+    const line = document.createElementNS(svgNS, 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', '#c0cdd8');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-dasharray', '4,3');
+    svg.appendChild(line);
+  });
+
+  const addCircleNode = (cx, cy, gradId, label, value) => {
+    const shadow = document.createElementNS(svgNS, 'circle');
+    shadow.setAttribute('cx', cx); shadow.setAttribute('cy', cy);
+    shadow.setAttribute('r', cR);
+    shadow.setAttribute('filter', `url(#${filterId})`);
+    shadow.setAttribute('fill', 'white');
+    svg.appendChild(shadow);
+
+    const circle = document.createElementNS(svgNS, 'circle');
+    circle.setAttribute('cx', cx); circle.setAttribute('cy', cy);
+    circle.setAttribute('r', cR);
+    circle.setAttribute('fill', `url(#${gradId})`);
+    svg.appendChild(circle);
+
+    const glow = document.createElementNS(svgNS, 'circle');
+    glow.setAttribute('cx', cx); glow.setAttribute('cy', cy);
+    glow.setAttribute('r', cR - 3);
+    glow.setAttribute('fill', 'none');
+    glow.setAttribute('stroke', 'rgba(255,255,255,0.2)');
+    glow.setAttribute('stroke-width', '1');
+    svg.appendChild(glow);
+
+    const lbl = document.createElementNS(svgNS, 'text');
+    lbl.setAttribute('x', cx); lbl.setAttribute('y', cy - 7);
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.setAttribute('class', 'tri-node-label');
+    lbl.textContent = label;
+    svg.appendChild(lbl);
+
+    const val = document.createElementNS(svgNS, 'text');
+    val.setAttribute('x', cx); val.setAttribute('y', cy + 16);
+    val.setAttribute('text-anchor', 'middle');
+    val.setAttribute('class', 'tri-node-value');
+    val.textContent = fmt$(value);
+    svg.appendChild(val);
+  };
+
+  addCircleNode(topCx, topCy, gradFreeId, 'TAX-FREE', taxFree);
+  addCircleNode(blCx, blCy, gradTaxableId, 'TAXABLE', taxable);
+  addCircleNode(brCx, brCy, gradDeferredId, 'TAX-DEFERRED', taxDeferred);
+
+  return svg;
+}
 
 
 /* ==========================================================================
@@ -2829,9 +2857,10 @@ function renderPresentation() {
     .reduce((s, r) => s + num(r.payment) * 12, 0);
 
   const expRows = (taxes.expenses || []).filter(Boolean);
-  const livingExp = expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
+  const livingExpField = num(taxes.livingExpenses);
+  const livingExp = livingExpField + expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
     .reduce((s, r) => s + num(r.amount), 0);
-  const totalExpenses = expRows.reduce((s, r) => s + num(r.amount), 0);
+  const totalExpenses = livingExpField + expRows.reduce((s, r) => s + num(r.amount), 0);
 
   const netCF = totalIncome - totalTax - totalSavings - debtPayments - livingExp;
 
@@ -2951,6 +2980,43 @@ function renderPresentation() {
       _mvFmt: fmt$(num(r.marketValue)),
       _addFmt: num(r.personalAdditions) > 0 ? fmt$(num(r.personalAdditions)) : '',
     }));
+
+    // Tax Triangle — tax-treatment breakdown shown above the accounts table
+    const taxFreeTotal = rothVal + hsaVal;
+    const taxableTotal = taxable + cashCd;
+    const taxDeferredTotal = taxDef;
+    const triTotal = taxFreeTotal + taxableTotal + taxDeferredTotal;
+    if (triTotal) {
+      const triBody = el('div', { className: 'pres-tax-triangle' });
+
+      const triChart = el('div', { className: 'pres-tri-chart' });
+      triChart.appendChild(buildTaxTriangleSVG(taxFreeTotal, taxableTotal, taxDeferredTotal, { idSuffix: 'Pres' }));
+      triBody.appendChild(triChart);
+
+      const triLegend = el('div', { className: 'pres-tri-legend' });
+      const pct = v => triTotal ? Math.round((v / triTotal) * 100) : 0;
+      const makeLegendRow = (swatchCls, label, value, desc) => {
+        const row = el('div', { className: 'pres-tri-legend-row' });
+        const top = el('div', { className: 'pres-tri-legend-top' });
+        top.appendChild(el('span', { className: `pres-tri-swatch ${swatchCls}` }));
+        top.appendChild(el('span', { className: 'pres-tri-legend-label', textContent: label }));
+        top.appendChild(el('span', { className: 'pres-tri-legend-pct', textContent: pct(value) + '%' }));
+        row.appendChild(top);
+        row.appendChild(el('div', { className: 'pres-tri-legend-value', textContent: fmt$(value) }));
+        row.appendChild(el('div', { className: 'pres-tri-legend-desc', textContent: desc }));
+        return row;
+      };
+      triLegend.appendChild(makeLegendRow('sw-free', 'Tax-Free', taxFreeTotal,
+        'Roth & HSA. Qualified withdrawals are not taxed.'));
+      triLegend.appendChild(makeLegendRow('sw-taxable', 'Taxable', taxableTotal,
+        'Brokerage, cash & CDs. Earnings taxed annually.'));
+      triLegend.appendChild(makeLegendRow('sw-deferred', 'Tax-Deferred', taxDeferredTotal,
+        '401(k), IRA, etc. Taxed as ordinary income at withdrawal.'));
+      triBody.appendChild(triLegend);
+
+      acctSec.body.appendChild(triBody);
+    }
+
     acctSec.body.appendChild(buildPresTable([
       { label: 'Tax Treatment', key: '_treat', pill: '_pillCls' },
       { label: 'Custodian / Description', key: '_label' },
@@ -3255,7 +3321,7 @@ function _planFinancials() {
   const debtPayments = (liabs.items || []).filter(Boolean)
     .reduce((s, r) => s + num(r.payment) * 12, 0);
   const expRows  = (taxes.expenses || []).filter(Boolean);
-  const livingExp = expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
+  const livingExp = num(taxes.livingExpenses) + expRows.filter(r => r._source !== 'liability' && r._source !== 'insurance')
     .reduce((s, r) => s + num(r.amount), 0);
   const netCF = totalIncome - totalTax - totalSavings - debtPayments - livingExp;
 
