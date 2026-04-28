@@ -3,146 +3,104 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Advisor Workflow Prototype</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Sans+3:wght@400;500;600&display=swap" rel="stylesheet">
+  <title>Pure Financial Advisors — Personal Financial Questionnaire</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="brand">Pure Financial Advisors</div>
+      <a class="brand" href="#" aria-label="Pure Financial Advisors">
+        <span class="brand-text">Pure Financial Advisors</span>
+      </a>
       <div class="topbar-actions">
+        <span id="autosave-status" class="autosave-status" aria-live="polite"></span>
+        <button type="button" id="topbar-save-btn" class="btn btn-primary">Save</button>
+        <button type="button" id="presentation-mode-btn" class="btn btn-ghost">Presentation Mode</button>
+        <button type="button" id="plan-mode-btn" class="btn btn-ghost">Plan Mode</button>
         <button type="button" id="open-console-btn" class="btn btn-ghost">Data Console</button>
-        <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Demo</button>
-        <div class="user-pill">John Smith <span>| Advisor</span></div>
+        <button type="button" id="reset-demo-btn" class="btn btn-ghost btn-ghost-danger">Reset Data</button>
       </div>
     </header>
 
     <main class="content">
-      <section class="pipeline" aria-label="Client onboarding pipeline">
-        <button id="step-btn-pq" type="button" class="pipeline-stage is-current" data-stage="pq">
-          <span class="pipeline-kicker">Phase 1</span>
-          <span class="pipeline-title">Discovery Intake</span>
-          <span class="pipeline-subtitle">PQ Template</span>
-          <span class="pipeline-status" id="stage-status-pq">In Progress</span>
-          <span class="pipeline-meta" id="stage-meta-pq">Intake not submitted</span>
-        </button>
-        <button id="step-btn-plan" type="button" class="pipeline-stage is-locked" data-stage="plan">
-          <span class="pipeline-kicker">Phase 2</span>
-          <span class="pipeline-title">Planning Build</span>
-          <span class="pipeline-subtitle">Plan Order Form</span>
-          <span class="pipeline-status" id="stage-status-plan">Waiting on PQ</span>
-          <span class="pipeline-meta" id="stage-meta-plan">Plan not submitted</span>
-        </button>
-        <button id="step-btn-client" type="button" class="pipeline-stage is-locked" data-stage="client">
-          <span class="pipeline-kicker">Phase 3</span>
-          <span class="pipeline-title">Client Confirmation</span>
-          <span class="pipeline-subtitle">Client Info Sheet</span>
-          <span class="pipeline-status" id="stage-status-client">Waiting on Plan</span>
-          <span class="pipeline-meta" id="stage-meta-client">No updates submitted</span>
-        </button>
-      </section>
-
+      <!-- ========== PQ DISCOVERY INTAKE ========== -->
       <section id="screen-pq" class="screen is-active">
         <section class="page-title">
-          <h1>PQ Template</h1>
-          <p>Phase 1: collect discovery intake details</p>
+          <h1>Personal Financial Questionnaire</h1>
         </section>
-
-        <form id="pq-form">
-          <div id="pq-form-sections"></div>
+        <form id="pq-form" autocomplete="off">
+          <div class="pq-layout">
+            <aside id="pq-notes-panel" class="pq-notes-panel"></aside>
+            <div id="pq-form-sections" class="form-col"></div>
+            <aside id="pq-dashboard" class="pq-dashboard"></aside>
+          </div>
           <footer class="actions">
-            <button type="button" id="pq-reset-btn" class="btn btn-light">Clear PQ Form</button>
-            <button type="submit" id="pq-submit-btn" class="btn btn-primary">Submit Discovery Intake</button>
+            <button type="button" id="pq-reset-btn" class="btn btn-light">Clear Form</button>
+            <button type="submit" id="pq-save-btn" class="btn btn-primary">Save</button>
           </footer>
         </form>
-      </section>
-
-      <section id="screen-pq-review" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>PQ Review</h1>
-          <p>Submitted intake snapshot from the central data store</p>
-        </section>
-
-        <section class="review-columns">
-          <article class="form-section review-pane">
-            <div class="section-header static-header">
-              <h2>Data Collected</h2>
-            </div>
-            <div class="section-content">
-              <ul id="pq-collected-list" class="review-list"></ul>
-            </div>
-          </article>
-
-          <article class="form-section review-pane">
-            <div class="section-header static-header">
-              <h2>Data Not Collected</h2>
-            </div>
-            <div class="section-content">
-              <ul id="pq-missing-list" class="review-list"></ul>
-            </div>
-          </article>
-        </section>
-
-        <footer class="actions">
-          <button type="button" id="back-to-pq-edit-btn" class="btn btn-light">Back to PQ Template</button>
-          <button type="button" id="continue-to-plan-btn" class="btn btn-primary">Start Planning Build</button>
-        </footer>
-      </section>
-
-      <section id="screen-plan" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>Plan Order Form</h1>
-          <p>Phase 2: confirm and extend assumptions for planning</p>
-        </section>
-
-        <section class="legend-bar" aria-live="polite">
-          <span class="legend-pill legend-yellow">Yellow = prefilled from central store</span>
-          <span class="legend-pill legend-red">Red = missing</span>
-          <span class="legend-pill legend-green">Green = completed/confirmed</span>
-        </section>
-
-        <form id="plan-form">
-          <div id="plan-form-sections"></div>
-          <footer class="actions">
-            <button type="button" id="back-to-pq-review-btn" class="btn btn-light">Back to PQ Review</button>
-            <button type="submit" id="plan-submit-btn" class="btn btn-primary">Submit Plan Order Form</button>
-          </footer>
-        </form>
-      </section>
-
-      <section id="screen-client" class="screen" aria-hidden="true">
-        <section class="page-title">
-          <h1>Client Info Sheet</h1>
-          <p>Phase 3: confirm and edit any centralized information</p>
-        </section>
-
-        <section class="legend-bar" aria-live="polite">
-          <span class="legend-pill">Gray = unchanged from central store</span>
-          <span class="legend-pill legend-yellow">Yellow = edited (not committed)</span>
-          <span class="legend-pill legend-green">Green = committed update</span>
-        </section>
-
-        <section class="form-section">
-          <div class="section-header static-header">
-            <h2>Editable Central Record</h2>
-            <button type="button" id="refresh-client-sheet-btn" class="btn-link">Refresh</button>
-          </div>
-          <div class="section-content">
-            <div id="client-editor-grid" class="grid"></div>
-          </div>
-        </section>
-
-        <footer class="actions">
-          <button type="button" id="back-to-plan-btn" class="btn btn-light">Back to Plan Order Form</button>
-          <button type="button" id="client-update-btn" class="btn btn-primary">Update Central Record</button>
-        </footer>
       </section>
     </main>
   </div>
 
+  <!-- ========== PRESENTATION MODE ========== -->
+  <section id="screen-presentation" class="screen">
+    <div class="pres-nav no-print">
+      <div class="pres-nav-brand brand" aria-label="Pure Financial Advisors">
+        <span class="brand-text">Pure Financial Advisors</span>
+      </div>
+      <div class="pres-nav-actions">
+        <button type="button" id="pres-edit-btn" class="btn btn-light">← Edit</button>
+        <button type="button" id="pres-print-btn" class="btn btn-primary">Print / Save PDF</button>
+      </div>
+    </div>
+    <div id="pres-content" class="pres-content"></div>
+  </section>
+
+  <!-- ========== PLAN MODE ========== -->
+  <section id="screen-plan" class="screen">
+    <div class="plan-nav no-print">
+      <div class="plan-nav-brand brand" aria-label="Pure Financial Advisors — Plan Order">
+        <span class="brand-text">Pure Financial Advisors</span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-context">Plan Order</span>
+      </div>
+      <div class="plan-nav-actions">
+        <button type="button" id="plan-edit-btn" class="btn btn-light">← Back to PQ</button>
+        <button type="button" id="plan-save-btn" class="btn btn-primary">Send to Planning</button>
+      </div>
+    </div>
+    <div class="plan-layout">
+      <aside id="plan-summary" class="plan-summary"></aside>
+      <div class="plan-form-wrap">
+        <form id="plan-form" autocomplete="off">
+          <div id="plan-form-sections"></div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Notes Drawer (slides out from left) -->
+  <aside id="notes-drawer" class="notes-drawer" aria-hidden="true">
+    <button type="button" id="notes-drawer-tab" class="notes-drawer-tab" aria-label="Open notes and goals">
+      <span class="notes-drawer-tab-label">Goals &amp; Notes</span>
+      <span class="notes-drawer-tab-arrow" aria-hidden="true">›</span>
+    </button>
+    <div class="notes-drawer-panel">
+      <header class="notes-drawer-header">
+        <h2>Goals &amp; Advisor Notes</h2>
+        <button type="button" id="notes-drawer-close" class="btn btn-light" aria-label="Close">Close</button>
+      </header>
+      <div class="notes-drawer-body">
+        <label class="notes-drawer-label" for="drawer-goals">Client Goals</label>
+        <textarea id="drawer-goals" class="notes-drawer-textarea" placeholder="Retirement, college, travel, legacy..."></textarea>
+        <label class="notes-drawer-label" for="drawer-notes">Advisor Notes</label>
+        <textarea id="drawer-notes" class="notes-drawer-textarea" placeholder="Free-form notes..."></textarea>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Data Console Overlay -->
   <aside id="data-console" class="data-console" aria-hidden="true">
     <header class="data-console-header">
       <h2>Data Console</h2>
