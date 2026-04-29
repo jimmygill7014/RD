@@ -1,15 +1,19 @@
+import { pqSections } from '../schema/pqSections.js';
+import FormSection from '../components/FormSection.jsx';
+
 export default function PQScreen() {
   return (
     <section className="screen is-active">
       <section className="page-title">
         <h1>Personal Financial Questionnaire</h1>
       </section>
-      <form id="pq-form" autoComplete="off">
+      <form id="pq-form" autoComplete="off" onSubmit={e => e.preventDefault()}>
         <div className="pq-layout">
           <aside className="pq-notes-panel"></aside>
           <div className="form-col">
-            {/* TODO: port form sections from app.js into <FormSection /> components */}
-            <p className="section-note">Form sections will render here.</p>
+            {pqSections.map(s => (
+              <FormSection key={s.id} section={s} />
+            ))}
           </div>
           <aside className="pq-dashboard"></aside>
         </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StoreProvider } from './store/StoreContext.jsx';
 import Topbar from './components/Topbar.jsx';
 import PQScreen from './screens/PQScreen.jsx';
 import PresentationScreen from './screens/PresentationScreen.jsx';
@@ -18,7 +19,7 @@ export default function App() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <>
+    <StoreProvider>
       <div className="app-shell">
         <Topbar
           onPresentation={() => setScreen(SCREENS.PRESENTATION)}
@@ -40,6 +41,6 @@ export default function App() {
 
       <NotesDrawer open={drawerOpen} onToggle={() => setDrawerOpen(o => !o)} />
       <DataConsole open={consoleOpen} onClose={() => setConsoleOpen(false)} />
-    </>
+    </StoreProvider>
   );
 }

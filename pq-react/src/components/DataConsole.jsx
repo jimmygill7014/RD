@@ -1,4 +1,7 @@
-export default function DataConsole({ open, onClose, data = {} }) {
+import { useStore } from '../store/StoreContext.jsx';
+
+export default function DataConsole({ open, onClose }) {
+  const { data } = useStore();
   if (!open) return null;
   return (
     <aside className="data-console is-open" aria-hidden={!open}>
