@@ -1,5 +1,11 @@
 import { useStore } from '../store/StoreContext.jsx';
 import { useAutoSourceSync } from '../store/useAutoSourceSync.js';
+import {
+  getTotalExpenses,
+  getTotalTaxesPaid,
+  getEffectiveTaxRate,
+  formatDollars,
+} from '../store/selectors.js';
 import Field from './Field.jsx';
 import DataTable from './DataTable.jsx';
 
@@ -31,10 +37,16 @@ const EXPENSES_TABLE = {
   ],
 };
 
-function GroupRow({ label }) {
+function GroupRow({ label, totalText, hintText }) {
   return (
     <div className="taxexp-group-row">
       <div className="taxexp-group-label">{label}</div>
+      {totalText != null && (
+        <div className="taxexp-total-badge">
+          <input type="text" className="taxexp-total-val" value={totalText} readOnly />
+          {hintText && <span className="taxexp-total-hint">{hintText}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -99,7 +111,16 @@ export default function TaxesExpensesSection({ section }) {
         <GroupRow label="Income & Deductions" />
         <div className="grid">{PRIOR_INCOME_FIELDS.map(renderField)}</div>
 
-        <GroupRow label="Taxes Paid" />
+        <GroupRow
+          label="Taxes Paid"
+          totalText={formatDollars(getTotalTaxesPaid(data))}
+          hintText={(() => {
+            const rate = getEffectiveTaxRate(data);
+            return rate != null
+              ? `${rate.toFixed(1)}% effective rate on taxable income`
+              : 'Federal + State + FICA';
+          })()}
+        />
         <div className="grid">{PRIOR_TAXES_FIELDS.map(renderField)}</div>
 
         {/* --- Annual Expenses --- */}
@@ -112,7 +133,12 @@ export default function TaxesExpensesSection({ section }) {
             value={sectionData.livingExpenses}
             onChange={val => update('taxesExpenses.livingExpenses', val)}
           />
-          {/* Total Expenses computed field — deferred until computation engine. */}
+          <label className="field-medium field-computed field-total">
+            <div className="label-row">
+              <span className="label">Total Expenses</span>
+            </div>
+            <input type="text" value={formatDollars(getTotalExpenses(data))} readOnly />
+          </label>
         </div>
       </div>
     </section>

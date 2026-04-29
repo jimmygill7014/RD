@@ -1,6 +1,12 @@
+import { useStore } from '../store/StoreContext.jsx';
+
 export default function NotesDrawer({ open, onToggle }) {
+  const { data, update } = useStore();
+  const goals = data._goals ?? '';
+  const notes = data._advisorNotes ?? '';
+
   return (
-    <aside className={`notes-drawer ${open ? 'is-open' : ''}`} aria-hidden={!open}>
+    <aside className={'notes-drawer' + (open ? ' is-open' : '')} aria-hidden={!open}>
       <button
         type="button"
         className="notes-drawer-tab"
@@ -23,12 +29,16 @@ export default function NotesDrawer({ open, onToggle }) {
             id="drawer-goals"
             className="notes-drawer-textarea"
             placeholder="Retirement, college, travel, legacy..."
+            value={goals}
+            onChange={e => update('_goals', e.target.value)}
           />
           <label className="notes-drawer-label" htmlFor="drawer-notes">Advisor Notes</label>
           <textarea
             id="drawer-notes"
             className="notes-drawer-textarea"
             placeholder="Free-form notes..."
+            value={notes}
+            onChange={e => update('_advisorNotes', e.target.value)}
           />
         </div>
       </div>

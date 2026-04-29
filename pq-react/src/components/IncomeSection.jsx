@@ -1,5 +1,5 @@
 import { useStore } from '../store/StoreContext.jsx';
-import { getOwnerNameOptions } from '../store/selectors.js';
+import { getOwnerNameOptions, getTotalIncome, formatDollars } from '../store/selectors.js';
 import { useAutoSourceSync } from '../store/useAutoSourceSync.js';
 import DataTable from './DataTable.jsx';
 
@@ -127,8 +127,14 @@ export default function IncomeSection({ section }) {
         {tables.map(t => (
           <DataTable key={t.key} sectionId="income" tableDef={t} />
         ))}
-        {/* TODO: Total Income computed field — needs the computation engine,
-            which we haven't ported yet. */}
+        <div className="grid" style={{ marginTop: 10 }}>
+          <label className="field-medium field-computed field-total">
+            <div className="label-row">
+              <span className="label">Total Income</span>
+            </div>
+            <input type="text" value={formatDollars(getTotalIncome(data))} readOnly />
+          </label>
+        </div>
       </div>
     </section>
   );
