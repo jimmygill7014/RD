@@ -1,12 +1,9 @@
 import { useStore } from '../store/StoreContext.jsx';
+import { useAutoSourceSync } from '../store/useAutoSourceSync.js';
 import Field from './Field.jsx';
 import DataTable from './DataTable.jsx';
 
-// TODO (with the broader auto-source pass):
-//   - Annual Expenses: auto-rows from liabilities.items (payment * 12) and
-//     insurance.policies (annualPremium), with description/amount/notes
-//     read-only.
-//   - Total Expenses computed field — needs the computation engine.
+const EXPENSE_READONLY_COLS = ['description', 'amount', 'notes'];
 
 const PRIOR_INCOME_FIELDS = [
   { key: 'taxableIncome', label: 'Taxable Income', type: 'currency', width: 'medium' },
@@ -45,6 +42,41 @@ function GroupRow({ label }) {
 export default function TaxesExpensesSection({ section }) {
   const { data, update } = useStore();
   const sectionData = data.taxesExpenses || {};
+
+  // Annual Expenses auto-rows: liabilities (monthly payment * 12) + insurance
+  // (annual premium). Both share the same _source-keyed shape.
+  useAutoSourceSync({
+    targetPath: 'taxesExpenses.expenses',
+    matchKeyField: '_source',
+    computeAutoRows: d => {
+      const rows = [];
+      const liabs = Array.isArray(d?.liabilities?.items) ? d.liabilities.items : [];
+      liabs.forEach((l, i) => {
+        if (l?.payment && parseFloat(l.payment) > 0) {
+          rows.push({
+            _source: `liability:${l._reKey || i}`,
+            description: l.description || 'Loan Payment',
+            amount: parseFloat(l.payment) * 12,
+            notes: 'From liabilities',
+            _readOnly: EXPENSE_READONLY_COLS,
+          });
+        }
+      });
+      const policies = Array.isArray(d?.insurance?.policies) ? d.insurance.policies : [];
+      policies.forEach((p, i) => {
+        if (p?.annualPremium && parseFloat(p.annualPremium) > 0) {
+          rows.push({
+            _source: `insurance:${i}`,
+            description: 'Insurance Premium - ' + (p.company || 'Unknown'),
+            amount: parseFloat(p.annualPremium),
+            notes: 'From insurance',
+            _readOnly: EXPENSE_READONLY_COLS,
+          });
+        }
+      });
+      return rows;
+    },
+  });
 
   const renderField = f => (
     <Field

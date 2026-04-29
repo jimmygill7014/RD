@@ -1,9 +1,8 @@
 import DataTable from './DataTable.jsx';
+import { useAutoSourceSync } from '../store/useAutoSourceSync.js';
 
-// Note: when Assets is ported, real-estate rows with remainingLoan > 0 should
-// auto-seed read-only rows here (description, payment, amount, interest rate,
-// term) tagged with _reKey for live sync to the source. Until then this is a
-// plain user-managed list.
+const RE_READONLY_COLS = ['description', 'payment', 'amount', 'interestRate', 'term'];
+
 const LIABILITIES_TABLE = {
   key: 'items',
   title: '',
@@ -19,6 +18,25 @@ const LIABILITIES_TABLE = {
 };
 
 export default function LiabilitiesSection({ section }) {
+  useAutoSourceSync({
+    targetPath: 'liabilities.items',
+    matchKeyField: '_reKey',
+    computeAutoRows: data => {
+      const re = Array.isArray(data?.assets?.realEstate) ? data.assets.realEstate : [];
+      return re
+        .filter(r => r?.remainingLoan && parseFloat(r.remainingLoan) > 0 && r._autoKey)
+        .map(r => ({
+          _reKey: r._autoKey,
+          description: (r.description || 'RE Loan') + ' Mortgage',
+          payment: r.payment || '',
+          amount: r.remainingLoan,
+          interestRate: r.interestRate || '',
+          term: r.term || '',
+          _readOnly: RE_READONLY_COLS,
+        }));
+    },
+  });
+
   return (
     <section className={`form-section theme-${section.colorTheme || 'default'}`}>
       <div className="section-header">

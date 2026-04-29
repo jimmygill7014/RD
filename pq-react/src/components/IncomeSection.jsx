@@ -1,18 +1,71 @@
 import { useStore } from '../store/StoreContext.jsx';
 import { getOwnerNameOptions } from '../store/selectors.js';
+import { useAutoSourceSync } from '../store/useAutoSourceSync.js';
 import DataTable from './DataTable.jsx';
 
-// TODO: cross-section auto-source (deferred to a follow-up):
-//   - Employment Income: prepend rows from employment.client1/client2 when
-//     status === 'Employed', sourced via _source: 'client1'|'client2', with
-//     owner/description/retirementDate read-only.
-//   - Other Income: prepend rows from assets.realEstate where incomeEBT > 0,
-//     with owner/description/annualAmount/notes read-only.
-// Until then, all four tables are plain user-managed lists.
+function fullName(first, last) {
+  return [(first || '').trim(), (last || '').trim()].filter(Boolean).join(' ');
+}
+
+const EMP_READONLY_COLS = ['owner', 'description', 'retirementDate'];
+const RE_INCOME_READONLY_COLS = ['owner', 'description', 'annualAmount', 'notes'];
 
 export default function IncomeSection({ section }) {
   const { data } = useStore();
   const ownerOptions = getOwnerNameOptions(data);
+
+  // Employment Income: one auto-row per employed client.
+  useAutoSourceSync({
+    targetPath: 'income.employment',
+    matchKeyField: '_source',
+    computeAutoRows: d => {
+      const fam = d?.family || {};
+      const flags = d?._flags || {};
+      const emp = d?.employment || {};
+      const rows = [];
+      // Status defaults to 'Employed' if not yet persisted (matches the UI).
+      const c1Status = emp.client1?.status ?? 'Employed';
+      const c2Status = emp.client2?.status ?? 'Employed';
+      if (c1Status === 'Employed') {
+        rows.push({
+          _source: 'client1',
+          owner: fullName(fam.client1FirstName, fam.client1LastName),
+          description: emp.client1?.employer || '',
+          retirementDate: emp.client1?.retirementDate || '',
+          _readOnly: EMP_READONLY_COLS,
+        });
+      }
+      if (flags.hasSpouse && c2Status === 'Employed') {
+        rows.push({
+          _source: 'client2',
+          owner: fullName(fam.client2FirstName, fam.client2LastName),
+          description: emp.client2?.employer || '',
+          retirementDate: emp.client2?.retirementDate || '',
+          _readOnly: EMP_READONLY_COLS,
+        });
+      }
+      return rows;
+    },
+  });
+
+  // Other Income: one auto-row per real-estate asset with rental income.
+  useAutoSourceSync({
+    targetPath: 'income.other',
+    matchKeyField: '_source',
+    computeAutoRows: d => {
+      const re = Array.isArray(d?.assets?.realEstate) ? d.assets.realEstate : [];
+      return re
+        .filter(r => r?.incomeEBT && parseFloat(r.incomeEBT) > 0 && r._autoKey)
+        .map(r => ({
+          _source: `re:${r._autoKey}`,
+          owner: r.ownership || '',
+          description: r.description || 'Asset Income',
+          annualAmount: parseFloat(r.incomeEBT) * 12,
+          notes: 'From assets',
+          _readOnly: RE_INCOME_READONLY_COLS,
+        }));
+    },
+  });
 
   const tables = [
     {
