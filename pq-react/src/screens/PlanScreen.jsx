@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useStore } from '../store/StoreContext.jsx';
-import { getDashboardMetrics, formatDollars } from '../store/selectors.js';
+import { getDashboardMetrics } from '../store/selectors.js';
 import { planSections } from '../schema/planSections.js';
 import PlanField from '../components/PlanField.jsx';
+import PlanSummaryPanel from '../components/PlanSummaryPanel.jsx';
 
 function getSmartPrefills(data, m) {
   let cashFlow = '';
@@ -16,43 +17,6 @@ function getSmartPrefills(data, m) {
     spouseRetirementDate: data?.employment?.client2?.retirementDate || '',
     currentCashFlow: cashFlow,
   };
-}
-
-function PlanSummaryPanel({ data, m }) {
-  const family = data.family || {};
-  const c1 = [family.client1FirstName, family.client1LastName].filter(Boolean).join(' ');
-  const c2 = [family.client2FirstName, family.client2LastName].filter(Boolean).join(' ');
-
-  return (
-    <div className="plan-summary-inner">
-      <h3>Client Snapshot</h3>
-      <div className="plan-sum-name">{c1 || 'Client'}{c2 ? ` & ${c2}` : ''}</div>
-      <ul className="metric-list">
-        <li><span>Net Worth</span>
-          <strong className={`metric-value ${m.totalNetWorth >= 0 ? 'positive' : 'negative'}`}>
-            {formatDollars(m.totalNetWorth)}
-          </strong>
-        </li>
-        <li><span>Total Assets</span><strong className="metric-value">{formatDollars(m.totalAssets)}</strong></li>
-        <li><span>Total Liabilities</span><strong className="metric-value">{formatDollars(m.totalLiabilities)}</strong></li>
-        <li><span>Annual Income</span><strong className="metric-value">{formatDollars(m.totalIncome)}</strong></li>
-        <li><span>Annual Taxes</span><strong className="metric-value">{formatDollars(m.totalTax)}</strong></li>
-        <li><span>Annual Savings</span><strong className="metric-value">{formatDollars(m.totalSavings)}</strong></li>
-        <li style={{ borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-          <span style={{ fontWeight: 700 }}>Cash Flow</span>
-          <strong className={`metric-value ${m.cashFlow >= 0 ? 'positive' : 'negative'}`}>
-            {formatDollars(m.cashFlow)}
-          </strong>
-        </li>
-      </ul>
-      {data._goals && (
-        <>
-          <h3 style={{ marginTop: 16 }}>Goals</h3>
-          <div className="plan-sum-notes">{data._goals}</div>
-        </>
-      )}
-    </div>
-  );
 }
 
 export default function PlanScreen({ onBack }) {
@@ -102,7 +66,7 @@ export default function PlanScreen({ onBack }) {
 
       <div className="plan-layout">
         <aside className="plan-summary">
-          <PlanSummaryPanel data={data} m={m} />
+          <PlanSummaryPanel data={data} />
         </aside>
         <div className="plan-form-wrap">
           <form autoComplete="off" onSubmit={e => e.preventDefault()}>
