@@ -83,6 +83,69 @@ export function getEffectiveTaxRate(data) {
   return (totalTax / taxableInc) * 100;
 }
 
+function sumKey(rows, key) {
+  if (!Array.isArray(rows)) return 0;
+  return rows.reduce((s, r) => s + (r ? toNumber(r[key]) : 0), 0);
+}
+
+const ASSET_TABLES = ['realEstate', 'taxDeferred', 'roth', 'taxable', 'cashCd', 'plan529', 'hsa', 'businessOther'];
+
+export function getDashboardMetrics(data) {
+  const assets = data?.assets || {};
+  const liabilities = data?.liabilities || {};
+  const taxesExpenses = data?.taxesExpenses || {};
+
+  const totalAssets = ASSET_TABLES.reduce((s, k) => s + sumKey(assets[k], 'marketValue'), 0);
+  const realEstateAssets = sumKey(assets.realEstate, 'marketValue');
+  const businessOtherAssets = sumKey(assets.businessOther, 'marketValue');
+  const investableAssets = totalAssets - realEstateAssets - businessOtherAssets;
+
+  // Personal additions only (savings); excludes company match.
+  const totalSavings = ASSET_TABLES.reduce((s, k) => s + sumKey(assets[k], 'personalAdditions'), 0);
+
+  const totalLiabilities = sumKey(liabilities.items, 'amount');
+  const totalNetWorth = totalAssets - totalLiabilities;
+
+  const totalIncome = getTotalIncome(data);
+  const totalTax = getTotalTaxesPaid(data);
+
+  // Split annual expenses: liability-sourced vs everything else (+ separate
+  // livingExpenses field). Legacy used a hidden _source = 'liability' marker;
+  // our auto-source keys are 'liability:<id>', so prefix-match.
+  let liabilityPayments = 0;
+  let nonLiabilityExpenses = 0;
+  const expenses = Array.isArray(taxesExpenses.expenses) ? taxesExpenses.expenses : [];
+  expenses.forEach(r => {
+    if (!r) return;
+    const amt = toNumber(r.amount);
+    if (typeof r._source === 'string' && r._source.startsWith('liability')) {
+      liabilityPayments += amt;
+    } else {
+      nonLiabilityExpenses += amt;
+    }
+  });
+  nonLiabilityExpenses += toNumber(taxesExpenses.livingExpenses);
+
+  const cashFlow = totalIncome - totalSavings - liabilityPayments - totalTax - nonLiabilityExpenses;
+
+  const dti = totalIncome > 0 ? (totalLiabilities / totalIncome) * 100 : 0;
+  const savingsRatio = totalIncome > 0 ? (totalSavings / totalIncome) * 100 : 0;
+
+  // Tax triangle buckets
+  const taxFree = sumKey(assets.roth, 'marketValue') + sumKey(assets.hsa, 'marketValue');
+  const taxDeferred = sumKey(assets.taxDeferred, 'marketValue');
+  const taxable = sumKey(assets.taxable, 'marketValue') + sumKey(assets.cashCd, 'marketValue');
+
+  return {
+    totalAssets, realEstateAssets, businessOtherAssets, investableAssets,
+    totalLiabilities, totalNetWorth,
+    totalIncome, totalSavings, totalTax,
+    liabilityPayments, nonLiabilityExpenses, cashFlow,
+    dti, savingsRatio,
+    taxFree, taxDeferred, taxable,
+  };
+}
+
 export function formatDollars(n) {
   if (n == null || isNaN(n)) return '$0';
   const sign = n < 0 ? '-' : '';

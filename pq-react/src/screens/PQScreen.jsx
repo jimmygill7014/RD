@@ -1,5 +1,6 @@
 import { pqSections } from '../schema/pqSections.js';
 import FormSection from '../components/FormSection.jsx';
+import PQDashboard from '../components/PQDashboard.jsx';
 
 export default function PQScreen() {
   return (
@@ -15,7 +16,9 @@ export default function PQScreen() {
               <FormSection key={s.id} section={s} />
             ))}
           </div>
-          <aside className="pq-dashboard"></aside>
+          <aside className="pq-dashboard">
+            <PQDashboard />
+          </aside>
         </div>
         <footer className="actions">
           <button type="button" className="btn btn-light">Clear Form</button>
