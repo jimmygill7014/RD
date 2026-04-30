@@ -1,12 +1,24 @@
+import { useEffect, useRef } from 'react';
 import { useStore } from '../store/StoreContext.jsx';
 
-export default function NotesDrawer({ open, onToggle }) {
+export default function NotesDrawer({ open, onToggle, onClose }) {
   const { data, update } = useStore();
   const goals = data._goals ?? '';
   const notes = data._advisorNotes ?? '';
+  const drawerRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleMouseDown = e => {
+      if (drawerRef.current && drawerRef.current.contains(e.target)) return;
+      onClose();
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    return () => document.removeEventListener('mousedown', handleMouseDown);
+  }, [open, onClose]);
 
   return (
-    <aside className={'notes-drawer' + (open ? ' is-open' : '')} aria-hidden={!open}>
+    <aside ref={drawerRef} className={'notes-drawer' + (open ? ' is-open' : '')} aria-hidden={!open}>
       <button
         type="button"
         className="notes-drawer-tab"

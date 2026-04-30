@@ -46,7 +46,11 @@ function AppShell() {
         <PlanScreen onBack={() => setScreen(SCREENS.PQ)} />
       )}
 
-      <NotesDrawer open={drawerOpen} onToggle={() => setDrawerOpen(o => !o)} />
+      <NotesDrawer
+        open={drawerOpen}
+        onToggle={() => setDrawerOpen(o => !o)}
+        onClose={() => setDrawerOpen(false)}
+      />
       <DataConsole open={consoleOpen} onClose={() => setConsoleOpen(false)} />
     </>
   );
