@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StoreProvider } from './store/StoreContext.jsx';
+import { useAutoCalcFields } from './store/useAutoCalcFields.js';
 import Topbar from './components/Topbar.jsx';
 import PQScreen from './screens/PQScreen.jsx';
 import PresentationScreen from './screens/PresentationScreen.jsx';
@@ -13,13 +14,17 @@ const SCREENS = {
   PLAN: 'plan',
 };
 
-export default function App() {
+function AppShell() {
+  // Runs derived-field calculations on every store change. Lives inside the
+  // provider so it can use useStore via useAutoCalcFields.
+  useAutoCalcFields();
+
   const [screen, setScreen] = useState(SCREENS.PQ);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <StoreProvider>
+    <>
       <div className="app-shell">
         <Topbar
           onPresentation={() => setScreen(SCREENS.PRESENTATION)}
@@ -41,6 +46,14 @@ export default function App() {
 
       <NotesDrawer open={drawerOpen} onToggle={() => setDrawerOpen(o => !o)} />
       <DataConsole open={consoleOpen} onClose={() => setConsoleOpen(false)} />
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <StoreProvider>
+      <AppShell />
     </StoreProvider>
   );
 }
