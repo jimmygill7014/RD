@@ -42,7 +42,10 @@ export default function PlanScreen({ onBack }) {
   };
 
   return (
-    <section className="screen is-active">
+    <section
+      className="screen is-active"
+      style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}
+    >
       <div className="plan-nav no-print">
         <div className="plan-nav-brand brand" aria-label="Pure Financial Advisors — Plan Order">
           <span className="brand-text">Pure Financial Advisors</span>
