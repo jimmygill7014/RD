@@ -25,16 +25,18 @@ function AppShell() {
 
   return (
     <>
-      <div className="app-shell">
-        <Topbar
-          onPresentation={() => setScreen(SCREENS.PRESENTATION)}
-          onPlan={() => setScreen(SCREENS.PLAN)}
-          onOpenConsole={() => setConsoleOpen(true)}
-        />
-        <main className="content">
-          {screen === SCREENS.PQ && <PQScreen />}
-        </main>
-      </div>
+      {screen === SCREENS.PQ && (
+        <div className="app-shell">
+          <Topbar
+            onPresentation={() => setScreen(SCREENS.PRESENTATION)}
+            onPlan={() => setScreen(SCREENS.PLAN)}
+            onOpenConsole={() => setConsoleOpen(true)}
+          />
+          <main className="content">
+            <PQScreen />
+          </main>
+        </div>
+      )}
 
       {screen === SCREENS.PRESENTATION && (
         <PresentationScreen onBack={() => setScreen(SCREENS.PQ)} />
