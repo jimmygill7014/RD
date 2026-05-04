@@ -242,7 +242,7 @@ export default function PresentationScreen({ onBack }) {
               columns={[
                 { label: 'Role',  key: 'role' },
                 { label: 'Name',  key: 'name' },
-                { label: 'Firm',  key: 'firmName' },
+                { label: 'Firm',  key: 'firm' },
                 { label: 'City',  key: 'city' },
                 { label: 'State', key: 'state' },
               ]}
@@ -335,11 +335,11 @@ export default function PresentationScreen({ onBack }) {
         )}
 
         {/* Estate Plan */}
-        {((Array.isArray(epData.estatePlan) && epData.estatePlan.length) || epData.estatePlanYear) && (
+        {((Array.isArray(epData.estatePlan) && epData.estatePlan.length) || epData.yearsEstablished) && (
           <PresSection title="Estate Plan">
             <InfoGrid items={[
               { label: 'Plan Components', value: Array.isArray(epData.estatePlan) ? epData.estatePlan.join(', ') : epData.estatePlan, span: 2 },
-              { label: 'Year Established / Updated', value: epData.estatePlanYear },
+              { label: 'Year Established / Updated', value: epData.yearsEstablished },
             ]} />
           </PresSection>
         )}
@@ -447,10 +447,10 @@ function EmpBlock({ who, e }) {
       <InfoGrid items={[
         { label: 'Job Title',                              value: isWorking ? e.jobTitle : e.lastJob },
         { label: 'Employer' + (isWorking ? '' : ' (Last)'), value: isWorking ? e.employer : e.lastEmployer },
-        { label: '# of Years',                             value: isWorking ? e.years : e.yearsWorked },
+        { label: '# of Years',                             value: isWorking ? e.numOfYears : e.yearsWorked },
         { label: 'Retirement Date',                        value: e.retirementDate, hidden: !isWorking },
         { label: 'Retirement Age',                         value: e.retirementAge,  hidden: !isWorking },
-        { label: 'Type of Business',                       value: e.businessType,   hidden: !isWorking },
+        { label: 'Type of Business',                       value: e.typeOfBusiness, hidden: !isWorking },
       ]} />
     </>
   );

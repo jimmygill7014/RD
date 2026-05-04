@@ -6,10 +6,10 @@ const STATUS_OPTIONS = ['Employed', 'Retired', 'Not Employed'];
 const EMPLOYED_FIELDS = [
   { key: 'jobTitle', label: 'Job Title', width: 'medium' },
   { key: 'employer', label: 'Employer', width: 'medium' },
-  { key: 'years', label: '# of Years', type: 'number', width: 'field' },
+  { key: 'numOfYears', label: '# of Years', type: 'number', width: 'field' },
   { key: 'retirementDate', label: 'Retirement Date', type: 'date', width: 'medium' },
   { key: 'retirementAge', label: 'Retirement Age', type: 'number', width: 'field' },
-  { key: 'businessType', label: 'Type of Business', width: 'medium' },
+  { key: 'typeOfBusiness', label: 'Type of Business', width: 'medium' },
 ];
 
 const NOT_EMPLOYED_FIELDS = [

@@ -86,7 +86,7 @@ export const pqSections = [
     title: 'Estate Plan',
     fields: [
       { key: 'estatePlan', label: 'Estate Plan', type: 'multiselect', options: ['Trust', 'Will', 'FPOA', 'MPOA'], width: 'medium' },
-      { key: 'estatePlanYear', label: 'Year Established / Updated', width: 'medium' },
+      { key: 'yearsEstablished', label: 'Year Established / Updated', width: 'medium' },
     ],
   },
   {
@@ -99,7 +99,7 @@ export const pqSections = [
         columns: [
           { key: 'role', label: 'Role' },
           { key: 'name', label: 'Name' },
-          { key: 'firmName', label: 'Firm' },
+          { key: 'firm', label: 'Firm' },
           { key: 'city', label: 'City' },
           { key: 'state', label: 'State' },
         ],

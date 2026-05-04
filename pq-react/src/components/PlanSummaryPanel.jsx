@@ -54,7 +54,7 @@ function PersonEmpBlock({ name, status, e }) {
     <>
       <Row label={name} value={status || '—'} total />
       {sub && <AcctRow label="Occupation" value={sub} indent />}
-      {num(e.years) > 0 && <AcctRow label="# of Years" value={String(e.years)} indent />}
+      {num(e.numOfYears) > 0 && <AcctRow label="# of Years" value={String(e.numOfYears)} indent />}
       {e.retirementDate && <AcctRow label="Retirement Date" value={e.retirementDate} indent />}
     </>
   );
@@ -383,7 +383,7 @@ export default function PlanSummaryPanel({ data }) {
       {relRows.length > 0 && (
         <Section title="Professional Relationships">
           {relRows.map((r, i) => {
-            const subParts = [r.firmName, [r.city, r.state].filter(Boolean).join(', ')].filter(Boolean);
+            const subParts = [r.firm, [r.city, r.state].filter(Boolean).join(', ')].filter(Boolean);
             return (
               <AcctRow
                 key={i}
@@ -397,12 +397,12 @@ export default function PlanSummaryPanel({ data }) {
       )}
 
       {/* Estate Plan & Goals */}
-      {((Array.isArray(epData.estatePlan) && epData.estatePlan.length) || epData.estatePlanYear || goalsTxt) && (
+      {((Array.isArray(epData.estatePlan) && epData.estatePlan.length) || epData.yearsEstablished || goalsTxt) && (
         <Section title="Estate Plan & Goals">
           {Array.isArray(epData.estatePlan) && epData.estatePlan.length > 0 && (
             <Row label="Plan Components" value={epData.estatePlan.join(', ')} />
           )}
-          {epData.estatePlanYear && <Row label="Year Established" value={epData.estatePlanYear} />}
+          {epData.yearsEstablished && <Row label="Year Established" value={epData.yearsEstablished} />}
           {goalsTxt && <div className="plan-sum-notes">{goalsTxt}</div>}
         </Section>
       )}
