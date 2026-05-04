@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { ensureUidsDeep } from './uid.js';
 
 export const STORE_KEY = 'pfa-intake-v2';
 const AUTOSAVE_DEBOUNCE_MS = 800;
@@ -8,7 +9,7 @@ const StoreContext = createContext(null);
 
 function readFromStorage() {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+    return ensureUidsDeep(JSON.parse(localStorage.getItem(STORE_KEY) || '{}'));
   } catch {
     return {};
   }

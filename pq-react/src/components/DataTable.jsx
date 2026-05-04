@@ -1,4 +1,5 @@
 import { useStore } from '../store/StoreContext.jsx';
+import { genUid } from '../store/uid.js';
 import TableCell from './TableCell.jsx';
 import { useEffect } from 'react';
 
@@ -30,8 +31,8 @@ export default function DataTable({ sectionId, tableDef, noSeed = false }) {
     if (noSeed) return;
     if (rows && rows.length > 0) return;
     const seed = (tableDef.starterRows && tableDef.starterRows.length)
-      ? tableDef.starterRows.map(r => ({ ...r }))
-      : [{}];
+      ? tableDef.starterRows.map(r => ({ ...r, _uid: genUid() }))
+      : [{ _uid: genUid() }];
     update(path, seed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -43,11 +44,11 @@ export default function DataTable({ sectionId, tableDef, noSeed = false }) {
     update(path, next);
   };
 
-  const addRow = () => update(path, [...current, {}]);
+  const addRow = () => update(path, [...current, { _uid: genUid() }]);
 
   const removeRow = rowIdx => {
     const next = current.filter((_, i) => i !== rowIdx);
-    update(path, noSeed ? next : (next.length ? next : [{}]));
+    update(path, noSeed ? next : (next.length ? next : [{ _uid: genUid() }]));
   };
 
   const showTotals = !!tableDef.showTotals;
@@ -96,7 +97,7 @@ export default function DataTable({ sectionId, tableDef, noSeed = false }) {
           </thead>
           <tbody>
             {current.map((row, rowIdx) => (
-              <tr key={row._autoKey || row._source || row._reKey || rowIdx}>
+              <tr key={row._uid || row._autoKey || row._source || row._reKey || rowIdx}>
                 {tableDef.columns.map(col => (
                   <td
                     key={col.key}

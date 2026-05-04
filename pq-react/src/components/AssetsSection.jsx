@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from '../store/StoreContext.jsx';
 import { getOwnerNameOptions } from '../store/selectors.js';
+import { genUid } from '../store/uid.js';
 import DataTable from './DataTable.jsx';
 
 const RE_CHECK_DEFS = [
@@ -68,7 +69,7 @@ export default function AssetsSection({ section }) {
       const idx = merged.findIndex(r => r?._autoKey === def.key);
       if (checks[def.key]) {
         if (idx === -1) {
-          merged.push({ _autoKey: def.key, description: def.desc });
+          merged.push({ _uid: genUid(), _autoKey: def.key, description: def.desc });
           changed = true;
         } else if (merged[idx].description !== def.desc) {
           merged[idx] = { ...merged[idx], description: def.desc };

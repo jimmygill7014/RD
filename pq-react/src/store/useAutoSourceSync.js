@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useStore } from './StoreContext.jsx';
+import { genUid } from './uid.js';
 
 /**
  * Generic cross-section auto-source sync.
@@ -33,7 +34,8 @@ export function useAutoSourceSync({ targetPath, computeAutoRows, matchKeyField }
     const manualRows = existing.filter(r => !r?.[matchKeyField]);
     const freshAuto = autoRows.map(auto => {
       const prev = existing.find(r => r?.[matchKeyField] && r[matchKeyField] === auto[matchKeyField]);
-      return prev ? { ...prev, ...auto } : auto;
+      if (prev) return { ...prev, ...auto, _uid: prev._uid || genUid() };
+      return { ...auto, _uid: genUid() };
     });
 
     const merged = [...freshAuto, ...manualRows];

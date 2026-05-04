@@ -66,7 +66,7 @@ export default function TaxesExpensesSection({ section }) {
       liabs.forEach((l, i) => {
         if (l?.payment && parseFloat(l.payment) > 0) {
           rows.push({
-            _source: `liability:${l._reKey || i}`,
+            _source: `liability:${l._reKey || l._uid || i}`,
             description: l.description || 'Loan Payment',
             amount: parseFloat(l.payment) * 12,
             notes: 'From liabilities',
@@ -78,7 +78,7 @@ export default function TaxesExpensesSection({ section }) {
       policies.forEach((p, i) => {
         if (p?.annualPremium && parseFloat(p.annualPremium) > 0) {
           rows.push({
-            _source: `insurance:${i}`,
+            _source: `insurance:${p._uid || i}`,
             description: 'Insurance Premium - ' + (p.company || 'Unknown'),
             amount: parseFloat(p.annualPremium),
             notes: 'From insurance',
