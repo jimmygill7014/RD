@@ -73,7 +73,7 @@ export default function PlanSummaryPanel({ data }) {
   const rels     = data.relationships || {};
   const emp      = data.employment    || {};
   const epData   = data.goals         || {};
-  const goalsTxt = (data._goals || '').trim();
+  const goalsTxt = (data.goals?.clientGoals || '').trim();
   const flags    = data._flags        || {};
 
   const c1Name = [family.client1FirstName, family.client1LastName].filter(Boolean).join(' ') || 'Client 1';

@@ -3,8 +3,8 @@ import { useStore } from '../store/StoreContext.jsx';
 
 export default function NotesDrawer({ open, onToggle, onClose }) {
   const { data, update } = useStore();
-  const goals = data._goals ?? '';
-  const notes = data._advisorNotes ?? '';
+  const goals = data.goals?.clientGoals ?? '';
+  const notes = data.goals?.advisorNotes ?? '';
   const drawerRef = useRef(null);
 
   useEffect(() => {
@@ -42,7 +42,7 @@ export default function NotesDrawer({ open, onToggle, onClose }) {
             className="notes-drawer-textarea"
             placeholder="Retirement, college, travel, legacy..."
             value={goals}
-            onChange={e => update('_goals', e.target.value)}
+            onChange={e => update('goals.clientGoals', e.target.value)}
           />
           <label className="notes-drawer-label" htmlFor="drawer-notes">Advisor Notes</label>
           <textarea
@@ -50,7 +50,7 @@ export default function NotesDrawer({ open, onToggle, onClose }) {
             className="notes-drawer-textarea"
             placeholder="Free-form notes..."
             value={notes}
-            onChange={e => update('_advisorNotes', e.target.value)}
+            onChange={e => update('goals.advisorNotes', e.target.value)}
           />
         </div>
       </div>

@@ -105,7 +105,7 @@ export default function PresentationScreen({ onBack }) {
   const income = data.income || {};
   const taxes = data.taxesExpenses || {};
   const rels = data.relationships || {};
-  const goalsText = (data._goals || '').trim();
+  const goalsText = (data.goals?.clientGoals || '').trim();
   const epData = data.goals || {};
 
   const c1First = (family.client1FirstName || '').trim();
