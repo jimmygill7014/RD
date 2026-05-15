@@ -19,6 +19,22 @@ function writeToStorage(data) {
   localStorage.setItem(STORE_KEY, JSON.stringify(data));
 }
 
+async function saveToSalesforce(data) {
+  try {
+    const response = await fetch('/api/save-pq-form', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      console.error('Salesforce save failed:', err);
+    }
+  } catch (err) {
+    console.error('Salesforce save error:', err);
+  }
+}
+
 export function StoreProvider({ children }) {
   const [data, setData] = useState(readFromStorage);
   const [autosaveStatus, setAutosaveStatus] = useState('idle');
@@ -35,9 +51,10 @@ export function StoreProvider({ children }) {
     setAutosaveStatus('saving');
     clearTimeout(autosaveTimer.current);
     clearTimeout(flashTimer.current);
-    autosaveTimer.current = setTimeout(() => {
+    autosaveTimer.current = setTimeout(async () => {
       try {
         writeToStorage(data);
+        await saveToSalesforce(data);
         setAutosaveStatus('saved');
         flashTimer.current = setTimeout(() => setAutosaveStatus('idle'), SAVED_FLASH_MS);
       } catch (err) {
